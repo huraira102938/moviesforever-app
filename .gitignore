@@ -1,0 +1,24 @@
+# Android
+app/app/build/
+app/build/
+app/.gradle/
+app/local.properties
+app/.idea/
+app/*.iml
+app/captures/
+app/.externalNativeBuild/
+app/.cxx/
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.dev.vars
+worker/.wrangler/
+worker/wrangler-*.log
+
+# Admin panel is a separate git repo
+admin/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log

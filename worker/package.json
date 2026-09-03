@@ -1,0 +1,16 @@
+{
+  "name": "moviesforever-worker",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "MoviesForever Cloudflare Worker backend (redeem + signed-url)",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "login": "wrangler login"
+  },
+  "devDependencies": {
+    "wrangler": "^3.78.0"
+  }
+}
