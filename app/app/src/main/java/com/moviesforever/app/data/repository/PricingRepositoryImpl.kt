@@ -20,11 +20,16 @@ class PricingRepositoryImpl @Inject constructor(
             val doc = firestore.document("settings/pricing").get().await()
             if (doc.exists()) {
                 val data = doc.data ?: return@flow
+                val defaultForMissingFields = PricingSettings()
                 emit(
                     PricingSettings(
                         standardPrice = (data["standardPrice"] as? Number)?.toDouble() ?: 0.0,
                         referralPrice = (data["referralPrice"] as? Number)?.toDouble() ?: 0.0,
-                        referralPayout = (data["referralPayout"] as? Number)?.toDouble() ?: 0.0
+                        referralPayout = (data["referralPayout"] as? Number)?.toDouble() ?: 0.0,
+                        jazzcashNumber = (data["jazzcashNumber"] as? String)?.takeIf { it.isNotBlank() }
+                            ?: defaultForMissingFields.jazzcashNumber,
+                        jazzcashTitle = (data["jazzcashTitle"] as? String)?.takeIf { it.isNotBlank() }
+                            ?: defaultForMissingFields.jazzcashTitle
                     )
                 )
             }

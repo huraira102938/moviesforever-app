@@ -10,7 +10,7 @@ val GoldDark = Color(0xFFB8860B)
 val GoldDeep = Color(0xFF8B6914)
 
 // Neutrals
-val Black = Color(0xFF0A0A0A)
+val Black = Color(0xFF000000)
 val BlackSurface = Color(0xFF141414)
 val DarkSurface = Color(0xFF1A1A1A)
 val DarkSurfaceAlt = Color(0xFF222222)
