@@ -6,26 +6,27 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Hd
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -39,20 +40,19 @@ fun LockScreen(
     pricing: PricingSettings,
     onUnlocked: (String, String) -> Unit,
     onBrowseFree: () -> Unit,
+    onUnlockClick: () -> Unit = {},
     onRedemptionError: (String) -> Unit,
     redeeming: Boolean,
     onRedeemingChange: (Boolean) -> Unit
 ) {
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     var showSignIn by remember { mutableStateOf(false) }
-    var referralUsername by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Black)
     ) {
+        // Top Header Row with Logo and Sign In
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -90,18 +90,20 @@ fun LockScreen(
             )
             Spacer(Modifier.height(16.dp))
 
+            // Plan Cards Row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .height(440.dp),
+                    .height(430.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 LifetimeMiniCard(
                     modifier = Modifier
                         .width(240.dp)
                         .fillMaxHeight(),
-                    pricing = pricing
+                    pricing = pricing,
+                    onUnlockClick = onUnlockClick
                 )
                 FreeTrialMiniCard(
                     modifier = Modifier
@@ -111,27 +113,85 @@ fun LockScreen(
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            LifetimeDetails(
-                pricing = pricing,
-                referralUsername = referralUsername,
-                onReferralUsernameChange = { referralUsername = it },
-                clipboard = clipboard,
-                onSendScreenshot = {
-                    com.moviesforever.app.util.Payments.openSupportWhatsApp(context, referralUsername)
-                }
+            // --- RICH BOTTOM CONTENT ---
+            Text(
+                text = "Why Choose MoviesForever?",
+                color = TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
             )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Feature Grid Row 1
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FeatureTile(
+                    icon = Icons.Filled.Bolt,
+                    title = "Instant Unlock",
+                    subtitle = "WhatsApp activation",
+                    modifier = Modifier.weight(1f)
+                )
+                FeatureTile(
+                    icon = Icons.Filled.Hd,
+                    title = "Ultra HD / 4K",
+                    subtitle = "High video quality",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Feature Grid Row 2
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                FeatureTile(
+                    icon = Icons.Filled.Verified,
+                    title = "Safe Transfer",
+                    subtitle = "Verified account",
+                    modifier = Modifier.weight(1f)
+                )
+                FeatureTile(
+                    icon = Icons.Filled.CheckCircle,
+                    title = "No Ads Ever",
+                    subtitle = "Zero interruptions",
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
 
-            Text(
-                text = "Enjoy every movie for life with just one payment.",
-                color = TextMuted,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
+            // Reassurance Banner
+            Surface(
+                color = DarkSurface,
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkElevated),
                 modifier = Modifier.fillMaxWidth()
-            )
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(Gold, CircleShape)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Enjoy lifetime access with 24/7 WhatsApp verification support.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            }
         }
     }
 
@@ -147,6 +207,66 @@ fun LockScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun FeatureTile(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = DarkSurface,
+        shape = RoundedCornerShape(14.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkElevated),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(DarkElevated, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Gold,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    color = TextPrimary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
@@ -167,11 +287,9 @@ private fun FreeTrialMiniCard(modifier: Modifier = Modifier, onBrowseFree: () ->
             Text("No payment needed", color = TextMuted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
 
-            // Features / Pros
             MiniBenefitRow("Browse full catalog")
             MiniBenefitRow("Watch free movies & trailers")
 
-            // Limitations / Cons
             MiniConRow("Limited movies")
             MiniConRow("Slow bandwidth")
             MiniConRow("No downloads")
@@ -192,7 +310,11 @@ private fun FreeTrialMiniCard(modifier: Modifier = Modifier, onBrowseFree: () ->
 }
 
 @Composable
-private fun LifetimeMiniCard(modifier: Modifier = Modifier, pricing: PricingSettings) {
+private fun LifetimeMiniCard(
+    modifier: Modifier = Modifier,
+    pricing: PricingSettings,
+    onUnlockClick: () -> Unit
+) {
     Box(
         modifier = modifier
             .background(DarkSurface, RoundedCornerShape(18.dp))
@@ -229,69 +351,8 @@ private fun LifetimeMiniCard(modifier: Modifier = Modifier, pricing: PricingSett
             Spacer(Modifier.weight(1f))
             GoldButton(
                 text = "Unlock Now",
-                onClick = { /* Handle onClick later */ },
+                onClick = onUnlockClick,
                 modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-}
-
-@Composable
-private fun LifetimeDetails(
-    pricing: PricingSettings,
-    referralUsername: String,
-    onReferralUsernameChange: (String) -> Unit,
-    clipboard: ClipboardManager,
-    onSendScreenshot: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DarkSurface, RoundedCornerShape(20.dp))
-            .border(1.dp, Gold.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text("What you get with Lifetime Access", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-
-            BenefitRow("All current & future movies & shows")
-            BenefitRow("No subscription, no renewal, ever")
-            BenefitRow("Watch online + encrypted offline downloads")
-
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = DarkElevated)
-            Spacer(Modifier.height(16.dp))
-
-            Text("Send payment to", color = TextMuted, fontSize = 12.sp)
-            Spacer(Modifier.height(8.dp))
-            PaymentDetailRow(label = "JazzCash / EasyPaisa", value = pricing.jazzcashNumber, clipboard = clipboard)
-            Spacer(Modifier.height(8.dp))
-            PaymentDetailRow(label = "Account title", value = pricing.jazzcashTitle, clipboard = clipboard)
-
-            Spacer(Modifier.height(14.dp))
-            OutlinedTextField(
-                value = referralUsername,
-                onValueChange = onReferralUsernameChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Referral username (optional)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                colors = textFieldColors()
-            )
-            if (pricing.referralPayout > 0) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "We are giving lifetime access to our first 500 members only. Secure your spot before they run out so pay once today and enjoy all current and future movies forever. ",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-            GoldButton(
-                text = "Send Screenshot",
-                onClick = onSendScreenshot,
-                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -337,38 +398,6 @@ private fun MiniConRow(text: String) {
         )
         Spacer(Modifier.width(6.dp))
         Text(text, color = TextMuted, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun BenefitRow(text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(text, color = TextSecondary, fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun PaymentDetailRow(label: String, value: String, clipboard: ClipboardManager) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DarkElevated, RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(label, color = TextMuted, fontSize = 11.sp)
-            Text(value, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-        IconButton(onClick = { clipboard.setText(AnnotatedString(value)) }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.ContentCopy, contentDescription = "Copy $label", tint = Gold, modifier = Modifier.size(18.dp))
-        }
     }
 }
 

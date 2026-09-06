@@ -224,20 +224,19 @@ fun MovieDetailScreen(
             }
 
             // Action Buttons / Conversion Section
+            // Action Buttons / Conversion Section
             if (canFullPlay) {
                 GoldButton(
                     text = "Watch Now",
                     onClick = onWatchNow,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (!movie.isFree) {
-                    Spacer(Modifier.height(10.dp))
-                    GoldOutlinedButton(
-                        text = "Download Offline",
-                        onClick = onDownload,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                Spacer(Modifier.height(10.dp))
+                GoldOutlinedButton(
+                    text = "Download Offline",
+                    onClick = onDownload,
+                    modifier = Modifier.fillMaxWidth()
+                )
             } else {
                 if (hasTrailer) {
                     OutlinedButton(
