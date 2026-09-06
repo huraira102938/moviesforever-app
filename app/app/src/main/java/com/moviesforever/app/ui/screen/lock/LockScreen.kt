@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.*
@@ -93,7 +94,7 @@ fun LockScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .height(340.dp),
+                    .height(440.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 LifetimeMiniCard(
@@ -165,11 +166,16 @@ private fun FreeTrialMiniCard(modifier: Modifier = Modifier, onBrowseFree: () ->
             Spacer(Modifier.height(4.dp))
             Text("No payment needed", color = TextMuted, fontSize = 11.sp)
             Spacer(Modifier.height(10.dp))
+
+            // Features / Pros
             MiniBenefitRow("Browse full catalog")
             MiniBenefitRow("Watch free movies & trailers")
-            MiniBenefitRow("Limited movies")
-            MiniBenefitRow("Slow bandwidth")
-            MiniBenefitRow("No downloads")
+
+            // Limitations / Cons
+            MiniConRow("Limited movies")
+            MiniConRow("Slow bandwidth")
+            MiniConRow("No downloads")
+
             Spacer(Modifier.weight(1f))
             OutlinedButton(
                 onClick = onBrowseFree,
@@ -219,7 +225,13 @@ private fun LifetimeMiniCard(modifier: Modifier = Modifier, pricing: PricingSett
             MiniBenefitRow("No subscription, ever")
             MiniBenefitRow("Unlimited downloads")
             MiniBenefitRow("Faster streaming speed")
+
             Spacer(Modifier.weight(1f))
+            GoldButton(
+                text = "Unlock Now",
+                onClick = { /* Handle onClick later */ },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -269,7 +281,7 @@ private fun LifetimeDetails(
             if (pricing.referralPayout > 0) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "If someone referred you, enter their username — they'll get PKR ${pricing.referralPayout.toInt()} once your payment is verified.",
+                    "We are giving lifetime access to our first 500 members only. Secure your spot before they run out so pay once today and enjoy all current and future movies forever. ",
                     color = TextMuted,
                     fontSize = 11.sp
                 )
@@ -280,7 +292,6 @@ private fun LifetimeDetails(
                 text = "Send Screenshot",
                 onClick = onSendScreenshot,
                 modifier = Modifier.fillMaxWidth(),
-
             )
         }
     }
@@ -304,11 +315,28 @@ private fun LimitedBadge() {
 private fun MiniBenefitRow(text: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalAlignment = Alignment.Top
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp).padding(top = 2.dp))
+        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Gold, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(6.dp))
         Text(text, color = TextSecondary, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun MiniConRow(text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(text, color = TextMuted, fontSize = 11.sp)
     }
 }
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Color.Companion.White
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.moviesforever.app.ui.theme.Gold
 import com.moviesforever.app.ui.theme.GoldLight
 import com.moviesforever.app.ui.theme.GoldDeep
@@ -70,7 +71,7 @@ fun GoldButton(
                     strokeWidth = 2.dp
                 )
             } else {
-                Text(text = text, color = Black)
+                Text(text = text, color = Black, fontSize = 14.sp)
             }
         }
     }
