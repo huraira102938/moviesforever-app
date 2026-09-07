@@ -2,6 +2,7 @@ package com.moviesforever.app.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -23,6 +24,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.ui.components.MoviesBottomBar
 import com.moviesforever.app.ui.screen.category.CategoryBrowseScreen
 import com.moviesforever.app.ui.screen.celebration.CelebrationScreen
@@ -196,7 +198,23 @@ fun MoviesForeverNavHost(
                                 navController.navigate(Screen.Player.createRoute(movie.id, trailer = true))
                             }
                         },
-                        onDownload = { },
+                        onDownload = {
+                            viewModel.downloadMovie(movie) { result ->
+                                when (result) {
+                                    DownloadRequestResult.Started -> {
+                                        scope.launch { snackbarHostState.showSnackbar("Download started") }
+                                    }
+                                    DownloadRequestResult.RequiresUnlock -> {
+                                        navController.navigate(Screen.PaymentInstructions.route)
+                                    }
+                                    DownloadRequestResult.RequiresWifi -> {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
                         onBack = { navController.popBackStack() }
                     )
@@ -226,7 +244,8 @@ fun MoviesForeverNavHost(
                         PlayerScreen(
                             videoUrl = url,
                             title = movie.title,
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            cacheKey = if (isTrailer) null else movie.id
                         )
                     }
                 }
@@ -261,6 +280,8 @@ fun MoviesForeverNavHost(
                 SettingsScreen(
                     isUnlocked = uiState.isUnlocked,
                     username = uiState.unlockInfo?.username,
+                    wifiOnlyDownloads = uiState.wifiOnlyDownloads,
+                    onWifiOnlyDownloadsChange = { viewModel.setWifiOnlyDownloads(it) },
                     onResetUnlock = { viewModel.resetUnlock() },
                     onBack = { navController.popBackStack() }
                 )
@@ -287,47 +308,54 @@ private fun MainScaffoldWithTabs(
             MoviesBottomBar(currentTab = currentTab, onTabSelected = onTabSelected)
         }
     ) { paddingValues ->
-        when (currentTab) {
-            0 -> HomeScreen(
-                banners = uiState.banners,
-                movies = uiState.movies,
-                pricing = uiState.pricing,
-                isUnlocked = uiState.isUnlocked,
-                onBannerClick = { banner ->
-                    if (banner.clickable && banner.linkedMovieId != null) {
-                        navController.navigate(Screen.MovieDetail.createRoute(banner.linkedMovieId))
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (currentTab) {
+                0 -> HomeScreen(
+                    banners = uiState.banners,
+                    movies = uiState.movies,
+                    pricing = uiState.pricing,
+                    isUnlocked = uiState.isUnlocked,
+                    onBannerClick = { banner ->
+                        if (banner.clickable && banner.linkedMovieId != null) {
+                            navController.navigate(Screen.MovieDetail.createRoute(banner.linkedMovieId))
+                        }
+                    },
+                    onMovieClick = { movie ->
+                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
+                    },
+                    onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
+                    onAvatarClick = { onTabSelected(3) }
+                )
+                1 -> SearchScreen(
+                    movies = uiState.movies,
+                    categories = uiState.categories,
+                    genres = uiState.genres,
+                    onMovieClick = { movie ->
+                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     }
-                },
-                onMovieClick = { movie ->
-                    navController.navigate(Screen.MovieDetail.createRoute(movie.id))
-                },
-                onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
-                onAvatarClick = { onTabSelected(3) }
-            )
-            1 -> SearchScreen(
-                movies = uiState.movies,
-                categories = uiState.categories,
-                genres = uiState.genres,
-                onMovieClick = { movie ->
-                    navController.navigate(Screen.MovieDetail.createRoute(movie.id))
-                }
-            )
-            2 -> DownloadsScreen(
-                downloadedMovies = emptyList(),
-                isUnlocked = uiState.isUnlocked,
-                onMovieClick = { movie ->
-                    navController.navigate(Screen.MovieDetail.createRoute(movie.id))
-                },
-                onSettings = { navController.navigate(Screen.Settings.route) }
-            )
-            3 -> ProfileScreen(
-                unlockInfo = uiState.unlockInfo,
-                pricing = uiState.pricing,
-                onShareReferral = { text -> shareText(context, text) },
-                onReferralClick = { navController.navigate(Screen.Referral.route) },
-                onSettings = { navController.navigate(Screen.Settings.route) },
-                onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) }
-            )
+                )
+                2 -> DownloadsScreen(
+                    downloadedMovies = uiState.downloadedMovies,
+                    downloadingMovies = uiState.movies.filter {
+                        uiState.downloadStatuses[it.id] is com.moviesforever.app.data.repository.MovieDownloadStatus.Downloading
+                    },
+                    downloadStatuses = uiState.downloadStatuses,
+                    isUnlocked = uiState.isUnlocked,
+                    onMovieClick = { movie ->
+                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
+                    },
+                    onRemoveDownload = { movieId -> viewModel.removeDownload(movieId) },
+                    onSettings = { navController.navigate(Screen.Settings.route) }
+                )
+                3 -> ProfileScreen(
+                    unlockInfo = uiState.unlockInfo,
+                    pricing = uiState.pricing,
+                    onShareReferral = { text -> shareText(context, text) },
+                    onReferralClick = { navController.navigate(Screen.Referral.route) },
+                    onSettings = { navController.navigate(Screen.Settings.route) },
+                    onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) }
+                )
+            }
         }
     }
 }

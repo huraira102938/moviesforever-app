@@ -10,7 +10,10 @@ import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.CategoriesRepository
+import com.moviesforever.app.data.repository.DownloadRepository
+import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.data.repository.GenresRepository
+import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.UnlockRepository
@@ -29,9 +32,12 @@ data class AppUiState(
     val categories: List<Category> = emptyList(),
     val genres: List<Genre> = emptyList(),
     val banners: List<Banner> = emptyList(),
+    val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
+    val wifiOnlyDownloads: Boolean = true,
     val loading: Boolean = true
 ) {
     val isUnlocked: Boolean get() = unlockInfo != null
+    val downloadedMovies: List<Movie> get() = movies.filter { downloadStatuses[it.id] is MovieDownloadStatus.Completed }
 }
 
 @HiltViewModel
@@ -41,7 +47,8 @@ class AppViewModel @Inject constructor(
     genresRepository: GenresRepository,
     bannersRepository: BannersRepository,
     pricingRepository: PricingRepository,
-    unlockRepository: UnlockRepository
+    unlockRepository: UnlockRepository,
+    private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
     private val unlockRepositoryRef = unlockRepository
@@ -65,8 +72,10 @@ class AppViewModel @Inject constructor(
     val uiState: StateFlow<AppUiState> = combine(
         unlockRepository.observeUnlockInfo(),
         pricingRepository.observePricing(),
-        contentFlow
-    ) { unlockInfo, pricing, content ->
+        contentFlow,
+        downloadRepository.observeDownloadStatuses(),
+        downloadRepository.observeWifiOnly()
+    ) { unlockInfo, pricing, content, downloadStatuses, wifiOnly ->
         AppUiState(
             unlockInfo = unlockInfo,
             pricing = pricing,
@@ -74,6 +83,8 @@ class AppViewModel @Inject constructor(
             categories = content.categories,
             genres = content.genres,
             banners = content.banners,
+            downloadStatuses = downloadStatuses,
+            wifiOnlyDownloads = wifiOnly,
             loading = false
         )
     }.stateIn(
@@ -91,6 +102,29 @@ class AppViewModel @Inject constructor(
     fun resetUnlock() {
         viewModelScope.launch {
             unlockRepositoryRef.resetUnlock()
+        }
+    }
+
+    /**
+     * Tries to download [movie] for offline playback.
+     * Callers get a [DownloadRequestResult] so they can show the right feedback:
+     * a paywall for locked+paid movies, or a "connect to WiFi" prompt when the
+     * WiFi-only setting is on and the device is on mobile data.
+     */
+    fun downloadMovie(movie: Movie, onResult: (DownloadRequestResult) -> Unit) {
+        viewModelScope.launch {
+            val result = downloadRepository.requestDownload(movie, uiState.value.isUnlocked)
+            onResult(result)
+        }
+    }
+
+    fun removeDownload(movieId: String) {
+        downloadRepository.removeDownload(movieId)
+    }
+
+    fun setWifiOnlyDownloads(enabled: Boolean) {
+        viewModelScope.launch {
+            downloadRepository.setWifiOnly(enabled)
         }
     }
 }

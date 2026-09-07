@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -25,13 +26,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.moviesforever.app.data.model.Movie
+import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.ui.theme.*
 
 @Composable
 fun DownloadsScreen(
     downloadedMovies: List<Movie>,
+    downloadingMovies: List<Movie>,
+    downloadStatuses: Map<String, MovieDownloadStatus>,
     isUnlocked: Boolean,
     onMovieClick: (Movie) -> Unit,
+    onRemoveDownload: (String) -> Unit,
     onSettings: () -> Unit
 ) {
     Column(
@@ -114,7 +119,7 @@ fun DownloadsScreen(
         }
 
         // Downloads List or Empty State
-        if (downloadedMovies.isEmpty()) {
+        if (downloadedMovies.isEmpty() && downloadingMovies.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -156,10 +161,21 @@ fun DownloadsScreen(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
+                if (downloadingMovies.isNotEmpty()) {
+                    items(downloadingMovies) { movie ->
+                        val status = downloadStatuses[movie.id] as? MovieDownloadStatus.Downloading
+                        DownloadingMovieCard(
+                            movie = movie,
+                            percent = status?.percent ?: 0,
+                            onCancel = { onRemoveDownload(movie.id) }
+                        )
+                    }
+                }
                 items(downloadedMovies) { movie ->
                     DownloadedMovieCard(
                         movie = movie,
-                        onClick = { onMovieClick(movie) }
+                        onClick = { onMovieClick(movie) },
+                        onRemove = { onRemoveDownload(movie.id) }
                     )
                 }
             }
@@ -168,9 +184,79 @@ fun DownloadsScreen(
 }
 
 @Composable
+private fun DownloadingMovieCard(
+    movie: Movie,
+    percent: Int,
+    onCancel: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, DarkElevated, RoundedCornerShape(14.dp))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AsyncImage(
+                model = movie.thumbnailUrl,
+                contentDescription = movie.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .width(70.dp)
+                    .height(95.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = movie.title,
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { (percent.coerceIn(0, 100)) / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = Gold,
+                    trackColor = DarkElevated
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Downloading • $percent%",
+                    color = GoldLight,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            IconButton(onClick = onCancel) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Cancel download",
+                    tint = TextMuted
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun DownloadedMovieCard(
     movie: Movie,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRemove: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
@@ -240,13 +326,23 @@ private fun DownloadedMovieCard(
                     )
                     Spacer(Modifier.width(4.dp))
                     Text(
-                        text = "Downloaded • Encrypted",
+                        text = "Downloaded",
                         color = GoldLight,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
+
+            IconButton(onClick = onRemove) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Remove download",
+                    tint = TextMuted
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
 
             Box(
                 modifier = Modifier

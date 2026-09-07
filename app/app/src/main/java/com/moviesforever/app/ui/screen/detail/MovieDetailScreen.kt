@@ -1,8 +1,10 @@
 package com.moviesforever.app.ui.screen.detail
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,10 +24,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.size.Size
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.components.GoldButton
@@ -57,19 +62,25 @@ fun MovieDetailScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(420.dp)
         ) {
+            val context = LocalContext.current
             AsyncImage(
-                model = movie.thumbnailUrl,
+                model = ImageRequest.Builder(context)
+                    .data(movie.thumbnailUrl)
+                    .size(Size.ORIGINAL)
+                    .allowHardware(false)
+                    .bitmapConfig(Bitmap.Config.ARGB_8888)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = movie.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth()
             )
 
             // Deep Gradient Overlay
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .matchParentSize()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
@@ -200,11 +211,14 @@ fun MovieDetailScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            // Genre Chips Row
+            // Horizontally Scrollable Genre Chips Row
             if (movie.genres.isNotEmpty()) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp)
                 ) {
                     movie.genres.forEach { genreId ->
                         genres[genreId]?.let { name ->
@@ -223,7 +237,6 @@ fun MovieDetailScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
-            // Action Buttons / Conversion Section
             // Action Buttons / Conversion Section
             if (canFullPlay) {
                 GoldButton(
@@ -253,7 +266,7 @@ fun MovieDetailScreen(
                     Spacer(Modifier.height(14.dp))
                 }
 
-                // Redesigned English Lifetime Access Card
+                // Redesigned Lifetime Access Card
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
                     shape = RoundedCornerShape(18.dp),

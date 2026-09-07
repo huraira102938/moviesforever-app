@@ -15,11 +15,11 @@ import com.moviesforever.app.ui.theme.*
 fun SettingsScreen(
     isUnlocked: Boolean,
     username: String?,
+    wifiOnlyDownloads: Boolean,
+    onWifiOnlyDownloadsChange: (Boolean) -> Unit,
     onResetUnlock: () -> Unit,
     onBack: () -> Unit
 ) {
-    var wifiOnly by remember { mutableStateOf(true) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -52,8 +52,8 @@ fun SettingsScreen(
                     )
                 }
                 Switch(
-                    checked = wifiOnly,
-                    onCheckedChange = { wifiOnly = it },
+                    checked = wifiOnlyDownloads,
+                    onCheckedChange = onWifiOnlyDownloadsChange,
                     colors = SwitchDefaults.colors(
                         checkedTrackColor = Gold,
                         checkedThumbColor = Black

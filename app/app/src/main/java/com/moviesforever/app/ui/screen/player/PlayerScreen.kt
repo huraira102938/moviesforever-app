@@ -13,10 +13,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
 import androidx.compose.material.icons.filled.Fullscreen
@@ -37,17 +40,20 @@ import androidx.compose.ui.window.Dialog
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.moviesforever.app.download.DownloadUtil
 import com.moviesforever.app.ui.theme.Black
 import com.moviesforever.app.ui.theme.DarkElevated
 import com.moviesforever.app.ui.theme.DarkSurface
 import com.moviesforever.app.ui.theme.Gold
 import com.moviesforever.app.ui.theme.TextPrimary
-import com.moviesforever.app.ui.theme.TextSecondary
+import java.util.Locale
 import kotlinx.coroutines.delay
 
 fun Context.findActivity(): Activity? {
@@ -68,12 +74,20 @@ data class SubtitleTrackInfo(
     val label: String
 )
 
+data class AudioTrackInfo(
+    val groupIndex: Int,
+    val trackIndex: Int,
+    val language: String,
+    val label: String
+)
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
     videoUrl: String,
     title: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    cacheKey: String? = null
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
@@ -87,20 +101,36 @@ fun PlayerScreen(
     var selectedSubtitleTrack by remember { mutableStateOf<SubtitleTrackInfo?>(null) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
 
+    // Audio track management states
+    var availableAudioTracks by remember { mutableStateOf<List<AudioTrackInfo>>(emptyList()) }
+    var selectedAudioTrack by remember { mutableStateOf<AudioTrackInfo?>(null) }
+    var showAudioDialog by remember { mutableStateOf(false) }
+
     // Initialize ExoPlayer
-    val exoPlayer = remember(videoUrl) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(Uri.parse(videoUrl)))
-            prepare()
-            playWhenReady = true
-        }
+    val exoPlayer = remember(videoUrl, cacheKey) {
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(DownloadUtil.getCacheDataSourceFactory(context))
+        val mediaItem = MediaItem.Builder()
+            .setUri(Uri.parse(videoUrl))
+            .apply { cacheKey?.let { setCustomCacheKey(it) } }
+            .build()
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                setMediaItem(mediaItem)
+                prepare()
+                playWhenReady = true
+            }
     }
 
-    // Listen for available subtitle tracks once video metadata is loaded
+    // Listen for available tracks (Text and Audio)
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
                 val subtitleList = mutableListOf<SubtitleTrackInfo>()
+                val audioList = mutableListOf<AudioTrackInfo>()
+
                 for (groupIndex in 0 until tracks.groups.size) {
                     val trackGroup = tracks.groups[groupIndex]
                     if (trackGroup.type == C.TRACK_TYPE_TEXT) {
@@ -117,9 +147,40 @@ fun PlayerScreen(
                                 )
                             )
                         }
+                    } else if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
+                        for (trackIndex in 0 until trackGroup.length) {
+                            val format = trackGroup.getTrackFormat(trackIndex)
+
+                            val langCode = format.language?.takeIf { it.isNotBlank() && it != "und" }
+                            val languageName = if (langCode != null) {
+                                Locale(langCode).displayLanguage.replaceFirstChar { it.uppercase() }
+                            } else {
+                                "Audio Track ${audioList.size + 1}"
+                            }
+
+                            val channels = if (format.channelCount > 0) " (${format.channelCount}ch)" else ""
+                            val label = if (langCode != null) {
+                                "$languageName$channels"
+                            } else {
+                                "Track ${audioList.size + 1}$channels"
+                            }
+
+                            val trackInfo = AudioTrackInfo(
+                                groupIndex = groupIndex,
+                                trackIndex = trackIndex,
+                                language = langCode ?: "Unknown",
+                                label = label
+                            )
+                            audioList.add(trackInfo)
+
+                            if (trackGroup.isTrackSelected(trackIndex) && selectedAudioTrack == null) {
+                                selectedAudioTrack = trackInfo
+                            }
+                        }
                     }
                 }
                 availableSubtitles = subtitleList
+                availableAudioTracks = audioList
             }
         }
         exoPlayer.addListener(listener)
@@ -147,7 +208,7 @@ fun PlayerScreen(
         }
     }
 
-    // Function to enable/disable or change subtitle tracks
+    // Toggle subtitles
     fun toggleSubtitles(enable: Boolean, track: SubtitleTrackInfo? = null) {
         val parameters = exoPlayer.trackSelectionParameters.buildUpon()
         if (!enable) {
@@ -159,7 +220,7 @@ fun PlayerScreen(
             if (track != null) {
                 val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
                 parameters.setOverrideForType(
-                    androidx.media3.common.TrackSelectionOverride(trackGroup, track.trackIndex)
+                    TrackSelectionOverride(trackGroup, track.trackIndex)
                 )
                 selectedSubtitleTrack = track
             } else {
@@ -168,6 +229,17 @@ fun PlayerScreen(
             subtitlesEnabled = true
         }
         exoPlayer.trackSelectionParameters = parameters.build()
+    }
+
+    // Switch audio track
+    fun selectAudioTrack(track: AudioTrackInfo) {
+        val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
+        val parameters = exoPlayer.trackSelectionParameters
+            .buildUpon()
+            .setOverrideForType(TrackSelectionOverride(trackGroup, track.trackIndex))
+            .build()
+        exoPlayer.trackSelectionParameters = parameters
+        selectedAudioTrack = track
     }
 
     Box(
@@ -259,34 +331,55 @@ fun PlayerScreen(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Subtitles Toggle Button (CC Icon)
-                        IconButton(
-                            onClick = {
-                                if (availableSubtitles.size > 1) {
-                                    showSubtitleDialog = true
-                                } else {
-                                    toggleSubtitles(!subtitlesEnabled)
-                                }
-                            },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = if (subtitlesEnabled) {
-                                    Icons.Filled.ClosedCaption
-                                } else {
-                                    Icons.Filled.ClosedCaptionOff
-                                },
-                                contentDescription = "Subtitles",
-                                tint = if (subtitlesEnabled) Gold else TextPrimary,
-                                modifier = Modifier.size(22.dp)
-                            )
+                        // Audio Track Selector
+                        if (availableAudioTracks.size > 1) {
+                            IconButton(
+                                onClick = { showAudioDialog = true },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Audiotrack,
+                                    contentDescription = "Audio Language",
+                                    tint = Gold,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(Modifier.width(8.dp))
                         }
 
-                        Spacer(Modifier.width(8.dp))
+                        // Subtitles Toggle Button
+                        if (availableSubtitles.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    if (availableSubtitles.size > 1) {
+                                        showSubtitleDialog = true
+                                    } else {
+                                        toggleSubtitles(!subtitlesEnabled)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = if (subtitlesEnabled) {
+                                        Icons.Filled.ClosedCaption
+                                    } else {
+                                        Icons.Filled.ClosedCaptionOff
+                                    },
+                                    contentDescription = "Subtitles",
+                                    tint = if (subtitlesEnabled) Gold else TextPrimary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
 
-                        // Screen Aspect Ratio Toggle Button ([ ])
+                            Spacer(Modifier.width(8.dp))
+                        }
+
+                        // Screen Aspect Ratio Toggle Button
                         IconButton(
                             onClick = { isFullScreenAspect = !isFullScreenAspect },
                             modifier = Modifier
@@ -309,16 +402,72 @@ fun PlayerScreen(
             }
         }
 
-        // Subtitle Selection Dialog (if multiple tracks exist)
+        // Audio Track Selection Dialog
+        if (showAudioDialog) {
+            Dialog(onDismissRequest = { showAudioDialog = false }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .background(DarkSurface, RoundedCornerShape(16.dp))
+                        .padding(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = "Audio Language",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(14.dp))
+
+                        availableAudioTracks.forEachIndexed { index, track ->
+                            if (index > 0) {
+                                HorizontalDivider(color = DarkElevated)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectAudioTrack(track)
+                                        showAudioDialog = false
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedAudioTrack == track || (selectedAudioTrack == null && index == 0),
+                                    onClick = {
+                                        selectAudioTrack(track)
+                                        showAudioDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(track.label, color = TextPrimary, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Subtitle Selection Dialog
         if (showSubtitleDialog) {
             Dialog(onDismissRequest = { showSubtitleDialog = false }) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .heightIn(max = 400.dp)
                         .background(DarkSurface, RoundedCornerShape(16.dp))
                         .padding(20.dp)
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
                         Text(
                             text = "Subtitle Language",
                             color = TextPrimary,
@@ -328,7 +477,6 @@ fun PlayerScreen(
 
                         Spacer(Modifier.height(14.dp))
 
-                        // Option 1: Off
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -353,7 +501,6 @@ fun PlayerScreen(
 
                         HorizontalDivider(color = DarkElevated)
 
-                        // Option 2: Available Subtitle Tracks
                         availableSubtitles.forEach { track ->
                             Row(
                                 modifier = Modifier

@@ -4,6 +4,8 @@ import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.BannersRepositoryImpl
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.CategoriesRepositoryImpl
+import com.moviesforever.app.data.repository.DownloadRepository
+import com.moviesforever.app.data.repository.DownloadRepositoryImpl
 import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.GenresRepositoryImpl
 import com.moviesforever.app.data.repository.MoviesRepository
@@ -51,4 +53,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRedemptionRepository(impl: RedemptionRepositoryImpl): RedemptionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
 }

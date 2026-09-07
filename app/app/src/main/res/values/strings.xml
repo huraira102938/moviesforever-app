@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">MoviesForever</string>
+    <string name="downloads_channel_name">Movie downloads</string>
 </resources>
