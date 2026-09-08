@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.net.Uri
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -55,6 +59,8 @@ import com.moviesforever.app.ui.theme.Gold
 import com.moviesforever.app.ui.theme.TextPrimary
 import java.util.Locale
 import kotlinx.coroutines.delay
+
+private const val TAG = "PlayerScreen"
 
 fun Context.findActivity(): Activity? {
     var currentContext = this
@@ -81,6 +87,62 @@ data class AudioTrackInfo(
     val label: String
 )
 
+data class ResizeModeOption(
+    val mode: Int,
+    val label: String
+)
+
+@OptIn(UnstableApi::class)
+private val resizeModeOptions = listOf(
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Fit (show full video)"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom (crop to fill)"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Stretch to fill"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Fixed width"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Fixed height")
+)
+
+/**
+ * Maps ExoPlayer's PlaybackException error codes to plain-English messages.
+ * The raw error code + name is also shown underneath so you (or the user, if
+ * they report a bug) can tell you exactly which category the failure fell into.
+ */
+fun getPlaybackErrorMessage(error: PlaybackException): String {
+    return when (error.errorCode) {
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+            "Network connection issue. Check your internet and try again."
+        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+            "Server rejected the request (bad link or expired access). Try again later."
+        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+            "Video file not found. The source link may be broken or removed."
+        PlaybackException.ERROR_CODE_IO_NO_PERMISSION ->
+            "Access denied to this video source."
+        PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED ->
+            "Insecure (HTTP) link blocked. Video source needs to use HTTPS."
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED ->
+            "Couldn't load the video source. The link may be invalid."
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
+            "This video file appears to be corrupted or malformed."
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
+            "This video's file format isn't supported."
+        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ->
+            "Your device doesn't support this video's format (codec)."
+        PlaybackException.ERROR_CODE_DECODING_FAILED ->
+            "Decoding failed. The video codec may be incompatible with this device."
+        PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
+        PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
+            "This video is protected (DRM) and can't be played."
+        PlaybackException.ERROR_CODE_TIMEOUT ->
+            "Playback timed out. Try again."
+        else ->
+            "Playback failed: ${error.errorCodeName} (${error.message ?: "unknown reason"})"
+    }
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -106,8 +168,16 @@ fun PlayerScreen(
     var selectedAudioTrack by remember { mutableStateOf<AudioTrackInfo?>(null) }
     var showAudioDialog by remember { mutableStateOf(false) }
 
+    // Video resize / aspect-ratio mode state
+    var currentResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var showAspectRatioDialog by remember { mutableStateOf(false) }
+
+    // Playback error / diagnostics state
+    var playbackError by remember { mutableStateOf<PlaybackException?>(null) }
+
     // Initialize ExoPlayer
     val exoPlayer = remember(videoUrl, cacheKey) {
+        Log.d(TAG, "Preparing player for url=$videoUrl cacheKey=$cacheKey")
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(DownloadUtil.getCacheDataSourceFactory(context))
         val mediaItem = MediaItem.Builder()
@@ -124,7 +194,7 @@ fun PlayerScreen(
             }
     }
 
-    // Listen for available tracks (Text and Audio)
+    // Listen for available tracks (Text and Audio) + playback errors
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onTracksChanged(tracks: Tracks) {
@@ -181,6 +251,34 @@ fun PlayerScreen(
                 }
                 availableSubtitles = subtitleList
                 availableAudioTracks = audioList
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                // This is the key hook: ExoPlayer stops silently unless we catch this.
+                Log.e(
+                    TAG,
+                    "Playback error for url=$videoUrl code=${error.errorCode} " +
+                            "name=${error.errorCodeName} message=${error.message}",
+                    error
+                )
+                // Log the full cause chain too -- often the real reason (e.g. an
+                // HttpDataSource.InvalidResponseCodeException with the actual HTTP
+                // status) is nested inside error.cause, not in the top-level message.
+                var cause: Throwable? = error.cause
+                var depth = 0
+                while (cause != null && depth < 5) {
+                    Log.e(TAG, "  caused by [$depth]: ${cause.javaClass.simpleName}: ${cause.message}")
+                    cause = cause.cause
+                    depth++
+                }
+                playbackError = error
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // Clear a stale error once playback actually starts progressing again
+                if (playbackState == Player.STATE_READY) {
+                    playbackError = null
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -242,6 +340,13 @@ fun PlayerScreen(
         selectedAudioTrack = track
     }
 
+    // Retry playback from scratch after an error
+    fun retryPlayback() {
+        playbackError = null
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -262,11 +367,18 @@ fun PlayerScreen(
                     setShowNextButton(false)
                     setShowPreviousButton(false)
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    resizeMode = currentResizeMode
                     controllerShowTimeoutMs = 3000
                     setOnClickListener {
                         showOverlayControls = !showOverlayControls
                     }
+                }
+            },
+            update = { playerView ->
+                // Called on every recomposition where currentResizeMode is a read key;
+                // this is what actually lets the user change aspect ratio live.
+                if (playerView.resizeMode != currentResizeMode) {
+                    playerView.resizeMode = currentResizeMode
                 }
             },
             modifier = Modifier.fillMaxSize()
@@ -331,6 +443,23 @@ fun PlayerScreen(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Aspect Ratio / Resize Mode Selector
+                        IconButton(
+                            onClick = { showAspectRatioDialog = true },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AspectRatio,
+                                contentDescription = "Aspect Ratio",
+                                tint = if (currentResizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) Gold else TextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
                         // Audio Track Selector
                         if (availableAudioTracks.size > 1) {
                             IconButton(
@@ -379,7 +508,7 @@ fun PlayerScreen(
                             Spacer(Modifier.width(8.dp))
                         }
 
-                        // Screen Aspect Ratio Toggle Button
+                        // Screen Aspect Ratio Toggle Button (fullscreen/portrait orientation, unrelated to resizeMode)
                         IconButton(
                             onClick = { isFullScreenAspect = !isFullScreenAspect },
                             modifier = Modifier
@@ -396,6 +525,67 @@ fun PlayerScreen(
                                 tint = TextPrimary,
                                 modifier = Modifier.size(22.dp)
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Playback Error Overlay -- shows what actually went wrong instead of
+        // silently stopping, plus a Retry button.
+        playbackError?.let { error ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Black.copy(alpha = 0.92f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Playback Error",
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = getPlaybackErrorMessage(error),
+                        color = TextPrimary.copy(alpha = 0.85f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Error code: ${error.errorCode} (${error.errorCodeName})",
+                        color = TextPrimary.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    error.cause?.message?.let { causeMessage ->
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = causeMessage,
+                            color = TextPrimary.copy(alpha = 0.4f),
+                            fontSize = 10.sp,
+                            textAlign = TextAlign.Center,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Row {
+                        Button(
+                            onClick = { retryPlayback() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Gold)
+                        ) {
+                            Text("Retry", color = Black)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedButton(onClick = onBack) {
+                            Text("Go Back", color = TextPrimary)
                         }
                     }
                 }
