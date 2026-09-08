@@ -17,6 +17,10 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +33,12 @@ import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.ui.theme.*
 
+/** What kind of removal is pending confirmation, so the dialog can word itself correctly. */
+private data class PendingRemoval(
+    val movie: Movie,
+    val wasDownloading: Boolean
+)
+
 @Composable
 fun DownloadsScreen(
     downloadedMovies: List<Movie>,
@@ -39,6 +49,12 @@ fun DownloadsScreen(
     onRemoveDownload: (String) -> Unit,
     onSettings: () -> Unit
 ) {
+    // Holds the movie awaiting a Yes/No confirmation before we actually call
+    // onRemoveDownload. Nothing is removed until the user explicitly confirms --
+    // this is what prevents an accidental tap on the X from silently wiping out
+    // an in-progress or completed download.
+    var pendingRemoval by remember { mutableStateOf<PendingRemoval?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -167,7 +183,7 @@ fun DownloadsScreen(
                         DownloadingMovieCard(
                             movie = movie,
                             percent = status?.percent ?: 0,
-                            onCancel = { onRemoveDownload(movie.id) }
+                            onCancel = { pendingRemoval = PendingRemoval(movie, wasDownloading = true) }
                         )
                     }
                 }
@@ -175,11 +191,56 @@ fun DownloadsScreen(
                     DownloadedMovieCard(
                         movie = movie,
                         onClick = { onMovieClick(movie) },
-                        onRemove = { onRemoveDownload(movie.id) }
+                        onRemove = { pendingRemoval = PendingRemoval(movie, wasDownloading = false) }
                     )
                 }
             }
         }
+    }
+
+    // Confirmation dialog -- the ONLY place onRemoveDownload actually gets called from.
+    pendingRemoval?.let { pending ->
+        AlertDialog(
+            onDismissRequest = { pendingRemoval = null },
+            containerColor = DarkSurface,
+            title = {
+                Text(
+                    text = if (pending.wasDownloading) "Cancel download?" else "Remove download?",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = if (pending.wasDownloading) {
+                        "\"${pending.movie.title}\" is still downloading. Cancelling will stop it and delete the partial download."
+                    } else {
+                        "\"${pending.movie.title}\" will be removed from your downloads. You'll need to download it again to watch it offline."
+                    },
+                    color = TextSecondary,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRemoveDownload(pending.movie.id)
+                        pendingRemoval = null
+                    }
+                ) {
+                    Text(
+                        text = if (pending.wasDownloading) "Cancel Download" else "Remove",
+                        color = Error,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRemoval = null }) {
+                    Text(text = "Keep", color = TextMuted)
+                }
+            }
+        )
     }
 }
 

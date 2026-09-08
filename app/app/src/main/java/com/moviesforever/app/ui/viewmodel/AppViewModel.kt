@@ -21,6 +21,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -40,6 +41,23 @@ data class AppUiState(
     val downloadedMovies: List<Movie> get() = movies.filter { downloadStatuses[it.id] is MovieDownloadStatus.Completed }
 }
 
+/**
+ * Result of the LOCAL unlock check only (DataStore on disk). This is intentionally
+ * kept separate from [AppUiState], which also waits on network calls (movies,
+ * categories, pricing, etc via Firestore). Gating navigation on the combined
+ * state caused an intermittent bug: on a cold start where Firestore's network
+ * calls were slow to resolve, [AppUiState] would still be sitting at its default
+ * (unlockInfo = null) when the splash screen made its routing decision, so
+ * premium/lifetime users would incorrectly get sent to the Lock screen even
+ * though their unlock info was already saved locally. Splash screen routing
+ * must only depend on this fast, local-only signal.
+ */
+sealed class UnlockCheckState {
+    data object Loading : UnlockCheckState()
+    data object Locked : UnlockCheckState()
+    data class Unlocked(val info: UnlockInfo) : UnlockCheckState()
+}
+
 @HiltViewModel
 class AppViewModel @Inject constructor(
     moviesRepository: MoviesRepository,
@@ -53,6 +71,20 @@ class AppViewModel @Inject constructor(
 
     private val unlockRepositoryRef = unlockRepository
 
+    /**
+     * Fast, network-independent unlock signal for routing decisions (splash screen).
+     * Backed only by local DataStore, so it resolves quickly and reliably regardless
+     * of Firestore/network latency. See [UnlockCheckState] for why this exists
+     * separately from [uiState].
+     */
+    val unlockCheckState: StateFlow<UnlockCheckState> = unlockRepository.observeUnlockInfo()
+        .map { info -> if (info != null) UnlockCheckState.Unlocked(info) else UnlockCheckState.Locked }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = UnlockCheckState.Loading
+        )
+
     private data class ContentData(
         val movies: List<Movie>,
         val categories: List<Category>,
@@ -60,24 +92,65 @@ class AppViewModel @Inject constructor(
         val banners: List<Banner>
     )
 
-    private val contentFlow = combine(
+    // Each of these is turned into its own hot StateFlow (via stateIn) BEFORE the
+    // final combine below. This matters: combine() only emits once every source
+    // has emitted at least once. If the network-backed sources (movies,
+    // categories, genres, banners, pricing) were combined directly as cold flows,
+    // the WHOLE uiState -- including unlockInfo, which is actually fast and local
+    // -- would sit at its default (unlockInfo = null) until those network calls
+    // finished. That caused a second instance of the same class of bug as the
+    // splash screen: HomeScreen would flash its "unlock lifetime pass" banner for
+    // ~1 second for premium users, right after the (correct) splash decision,
+    // because uiState.isUnlocked hadn't caught up yet.
+    //
+    // By pre-warming each source into its own StateFlow with an immediate cached
+    // initial value, the outer combine() can emit right away: content starts as
+    // empty lists (normal loading state, not a false "you're not premium" claim)
+    // while unlockCheckState -- which resolves in milliseconds -- is reflected
+    // correctly from the first emission.
+    private val contentDataState: StateFlow<ContentData> = combine(
         moviesRepository.observeMovies(),
         categoriesRepository.observeCategories(),
         genresRepository.observeGenres(),
         bannersRepository.observeBanners()
     ) { movies, categories, genres, banners ->
         ContentData(movies, categories, genres, banners)
-    }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ContentData(emptyList(), emptyList(), emptyList(), emptyList())
+    )
+
+    private val pricingState: StateFlow<PricingSettings> = pricingRepository.observePricing()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = PricingSettings()
+        )
+
+    private val downloadStatusesState: StateFlow<Map<String, MovieDownloadStatus>> =
+        downloadRepository.observeDownloadStatuses().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
+    private val wifiOnlyState: StateFlow<Boolean> = downloadRepository.observeWifiOnly()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
 
     val uiState: StateFlow<AppUiState> = combine(
-        unlockRepository.observeUnlockInfo(),
-        pricingRepository.observePricing(),
-        contentFlow,
-        downloadRepository.observeDownloadStatuses(),
-        downloadRepository.observeWifiOnly()
-    ) { unlockInfo, pricing, content, downloadStatuses, wifiOnly ->
+        unlockCheckState,
+        pricingState,
+        contentDataState,
+        downloadStatusesState,
+        wifiOnlyState
+    ) { unlockCheck, pricing, content, downloadStatuses, wifiOnly ->
         AppUiState(
-            unlockInfo = unlockInfo,
+            unlockInfo = (unlockCheck as? UnlockCheckState.Unlocked)?.info,
             pricing = pricing,
             movies = content.movies,
             categories = content.categories,
@@ -85,7 +158,7 @@ class AppViewModel @Inject constructor(
             banners = content.banners,
             downloadStatuses = downloadStatuses,
             wifiOnlyDownloads = wifiOnly,
-            loading = false
+            loading = unlockCheck is UnlockCheckState.Loading
         )
     }.stateIn(
         scope = viewModelScope,

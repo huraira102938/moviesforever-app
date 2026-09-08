@@ -2,6 +2,8 @@ package com.moviesforever.app.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -12,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -34,6 +37,7 @@ import com.moviesforever.app.ui.screen.home.HomeScreen
 import com.moviesforever.app.ui.screen.lock.LockScreen
 import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
 import com.moviesforever.app.ui.screen.player.PlayerScreen
+import com.moviesforever.app.ui.screen.player.findActivity
 import com.moviesforever.app.ui.screen.profile.ProfileScreen
 import com.moviesforever.app.ui.screen.referral.ReferralScreen
 import com.moviesforever.app.ui.screen.search.SearchScreen
@@ -42,6 +46,8 @@ import com.moviesforever.app.ui.screen.splash.SplashScreen
 import com.moviesforever.app.ui.theme.Black
 import com.moviesforever.app.ui.viewmodel.AppViewModel
 import com.moviesforever.app.ui.viewmodel.LockViewModel
+import com.moviesforever.app.ui.viewmodel.UnlockCheckState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -69,8 +75,16 @@ fun MoviesForeverNavHost(
         ) {
             composable(Screen.Splash.route) {
                 SplashScreen(
+                    unlockCheckState = viewModel.unlockCheckState,
                     onFinished = {
-                        if (uiState.isUnlocked) {
+                        // IMPORTANT: this reads the fast, local-only unlock check
+                        // (DataStore), not uiState.isUnlocked, which also waits on
+                        // network calls (movies/categories/pricing via Firestore).
+                        // Gating this decision on network content previously caused
+                        // premium users to intermittently see the Lock screen
+                        // whenever those network calls were slow to resolve.
+                        val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
+                        if (isUnlocked) {
                             navController.navigate(Screen.Main.route) {
                                 popUpTo(Screen.Splash.route) { inclusive = true }
                             }
@@ -140,11 +154,34 @@ fun MoviesForeverNavHost(
                         }
                         context.startActivity(intent)
                     },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafe() }
                 )
             }
 
             composable(Screen.Main.route) {
+                // Main is the root of the back stack once past Splash/Lock (that entry
+                // was removed via popUpTo(inclusive = true)). So a single system/back
+                // press here used to exit the app immediately with no confirmation.
+                // This adds the standard "press back again to exit" pattern.
+                val activity = context.findActivity()
+                var backPressedOnce by remember { mutableStateOf(false) }
+
+                BackHandler(enabled = true) {
+                    if (backPressedOnce) {
+                        activity?.finish()
+                    } else {
+                        backPressedOnce = true
+                        Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                LaunchedEffect(backPressedOnce) {
+                    if (backPressedOnce) {
+                        delay(2000)
+                        backPressedOnce = false
+                    }
+                }
+
                 MainScaffoldWithTabs(
                     currentTab = currentTab,
                     onTabSelected = { index -> currentTab = index },
@@ -216,7 +253,7 @@ fun MoviesForeverNavHost(
                             }
                         },
                         onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStackSafe() }
                     )
                 }
             }
@@ -244,7 +281,7 @@ fun MoviesForeverNavHost(
                         PlayerScreen(
                             videoUrl = url,
                             title = movie.title,
-                            onBack = { navController.popBackStack() },
+                            onBack = { navController.popBackStackSafe() },
                             cacheKey = if (isTrailer) null else movie.id
                         )
                     }
@@ -272,7 +309,7 @@ fun MoviesForeverNavHost(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
                     onShare = { text -> shareText(context, text) },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafe() }
                 )
             }
 
@@ -283,7 +320,7 @@ fun MoviesForeverNavHost(
                     wifiOnlyDownloads = uiState.wifiOnlyDownloads,
                     onWifiOnlyDownloadsChange = { viewModel.setWifiOnlyDownloads(it) },
                     onResetUnlock = { viewModel.resetUnlock() },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStackSafe() }
                 )
             }
         }

@@ -59,7 +59,7 @@ fun MoviesBottomBar(
                     Text(
                         text = tab.label,
                         color = if (currentTab == index) Gold else TextMuted,
-                        fontSize = 11.sp
+                        fontSize = 10.sp
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
