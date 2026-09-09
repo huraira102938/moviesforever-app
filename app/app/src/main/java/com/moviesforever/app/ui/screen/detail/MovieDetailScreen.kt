@@ -33,6 +33,7 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.components.GoldOutlinedButton
 import com.moviesforever.app.ui.theme.*
@@ -43,6 +44,7 @@ fun MovieDetailScreen(
     pricing: PricingSettings,
     isUnlocked: Boolean,
     genres: Map<String, String>,
+    downloadStatus: MovieDownloadStatus = MovieDownloadStatus.NotDownloaded,
     onWatchNow: () -> Unit,
     onWatchTrailer: () -> Unit,
     onDownload: () -> Unit,
@@ -239,17 +241,42 @@ fun MovieDetailScreen(
 
             // Action Buttons / Conversion Section
             if (canFullPlay) {
-                GoldButton(
-                    text = "Watch Now",
-                    onClick = onWatchNow,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(10.dp))
-                GoldOutlinedButton(
-                    text = "Download Offline",
-                    onClick = onDownload,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                when (downloadStatus) {
+                    is MovieDownloadStatus.Completed -> {
+                        // Downloaded: one button does it all, no separate "Watch Now"
+                        GoldButton(
+                            text = "Watch Offline",
+                            onClick = onWatchNow,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    is MovieDownloadStatus.Downloading -> {
+                        GoldButton(
+                            text = "Watch Now",
+                            onClick = onWatchNow,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        GoldOutlinedButton(
+                            text = "Downloading… ${downloadStatus.percent}%",
+                            onClick = { }, // no-op while in progress; cancel lives in the Downloads tab
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    else -> {
+                        GoldButton(
+                            text = "Watch Now",
+                            onClick = onWatchNow,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        GoldOutlinedButton(
+                            text = "Download Offline",
+                            onClick = onDownload,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             } else {
                 if (hasTrailer) {
                     OutlinedButton(

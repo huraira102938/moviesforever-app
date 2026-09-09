@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -31,6 +32,8 @@ import javax.inject.Singleton
 
 private val Context.downloadSettingsStore: DataStore<Preferences> by preferencesDataStore(name = "download_settings")
 
+private const val TAG = "MF_Download"
+
 @Singleton
 @UnstableApi
 class DownloadRepositoryImpl @Inject constructor(
@@ -45,8 +48,6 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override fun observeWifiOnly(): Flow<Boolean> {
         return context.downloadSettingsStore.data.map { prefs ->
-            // Default ON: safer default so a free/trial user doesn't accidentally burn
-            // mobile data the first time they hit "Download Offline".
             prefs[Keys.WIFI_ONLY] ?: true
         }
     }
@@ -57,25 +58,41 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Builds the full, current set of every known download, in every state.
+     *
+     * IMPORTANT: DownloadManager.getCurrentDownloads() explicitly EXCLUDES
+     * completed and failed downloads (this is documented Media3 behaviour,
+     * not a bug on Google's end) - using it alone caused a download to
+     * disappear from the UI the instant it finished, even though the file
+     * was still on disk and playable offline. downloadIndex.getDownloads()
+     * is the persisted record of every download regardless of state, so we
+     * use it as the base and overlay currentDownloads on top purely to get
+     * live percentage ticks for anything still actively downloading.
+     */
+    private fun allDownloadsById(downloadManager: androidx.media3.exoplayer.offline.DownloadManager): Map<String, Download> {
+        val all = mutableMapOf<String, Download>()
+        downloadManager.downloadIndex.getDownloads().use { cursor ->
+            while (cursor.moveToNext()) {
+                all[cursor.download.request.id] = cursor.download
+            }
+        }
+        downloadManager.currentDownloads.forEach { download ->
+            all[download.request.id] = download
+        }
+        return all
+    }
+
     override fun observeDownloadStatuses(): Flow<Map<String, MovieDownloadStatus>> = callbackFlow {
         val downloadManager = DownloadUtil.getDownloadManager(context)
 
-        // Read from the live in-memory list (currentDownloads), not the on-disk
-        // index - the index is only flushed periodically, which is why the old
-        // implementation looked "stuck" until the app was restarted.
-        fun snapshot(): Map<String, MovieDownloadStatus> {
-            return downloadManager.currentDownloads.associate { download ->
-                download.request.id to download.toStatus()
-            }
-        }
+        fun snapshot(): Map<String, MovieDownloadStatus> =
+            allDownloadsById(downloadManager).mapValues { (_, download) -> download.toStatus() }
 
         trySend(snapshot())
 
         val listener = object : androidx.media3.exoplayer.offline.DownloadManager.Listener {
             override fun onInitialized(downloadManager: androidx.media3.exoplayer.offline.DownloadManager) {
-                // Fires once the manager has finished loading persisted downloads
-                // from disk on startup - without this, a cold app start can briefly
-                // show an empty/stale list even though downloads exist.
                 trySend(snapshot())
             }
 
@@ -84,6 +101,9 @@ class DownloadRepositoryImpl @Inject constructor(
                 download: Download,
                 finalException: Exception?
             ) {
+                if (download.state == Download.STATE_COMPLETED || download.state == Download.STATE_FAILED) {
+                    Log.d(TAG, "onDownloadChanged: id=${download.request.id} -> ${stateName(download.state)} finalException=$finalException")
+                }
                 trySend(snapshot())
             }
 
@@ -91,18 +111,12 @@ class DownloadRepositoryImpl @Inject constructor(
                 downloadManager: androidx.media3.exoplayer.offline.DownloadManager,
                 download: Download
             ) {
+                Log.w(TAG, "onDownloadRemoved: id=${download.request.id} lastState=${stateName(download.state)}")
                 trySend(snapshot())
             }
         }
         downloadManager.addListener(listener)
 
-        // IMPORTANT: DownloadManager only notifies listeners on discrete state
-        // changes (queued -> downloading -> completed/failed) - it does NOT call
-        // onDownloadChanged on every progress tick. Without this poll, the
-        // percentage only ever refreshes once per state transition, which is
-        // what caused the "stuck until app restart" behaviour. Media3's own
-        // notification progress bar works the same way internally (it polls
-        // getCurrentDownloads() on a timer rather than waiting for callbacks).
         val pollingJob = launch {
             while (isActive) {
                 delay(1000)
@@ -124,15 +138,15 @@ class DownloadRepositoryImpl @Inject constructor(
     override fun observeDownloadedMovieInfo(): Flow<Map<String, Movie>> = callbackFlow {
         val downloadManager = DownloadUtil.getDownloadManager(context)
 
-        // Decode movie metadata directly from each persisted download request.
-        // This is deliberately independent of the live (Firestore) movie catalog:
-        // a movie that's been unpublished/removed remotely, or a catalog fetch
-        // that's slow/failed/incomplete, must never make an already-downloaded,
-        // playable-offline file disappear from "My Downloads".
         fun snapshot(): Map<String, Movie> {
-            return downloadManager.currentDownloads.mapNotNull { download ->
-                decodeMovie(download.request.data)?.let { movie -> download.request.id to movie }
+            val downloads = allDownloadsById(downloadManager)
+            val decoded = downloads.mapNotNull { (id, download) ->
+                decodeMovie(id, download.request.data)?.let { movie -> id to movie }
             }.toMap()
+            if (decoded.size != downloads.size) {
+                Log.w(TAG, "observeDownloadedMovieInfo: ${downloads.size - decoded.size} of ${downloads.size} downloads failed to decode and would have been hidden")
+            }
+            return decoded
         }
 
         trySend(snapshot())
@@ -164,23 +178,27 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    private fun decodeMovie(data: ByteArray): Movie? = try {
-        gson.fromJson(String(data), Movie::class.java)
-    } catch (e: Exception) {
-        // Downloads started before this change only stored the movie title as raw
-        // bytes (not JSON). Fail gracefully rather than crash -- those old
-        // downloads simply won't appear until re-downloaded; this never throws.
-        null
+    private fun decodeMovie(downloadId: String, data: ByteArray): Movie? {
+        if (data.isEmpty()) {
+            Log.w(TAG, "decodeMovie: id=$downloadId has EMPTY data blob (nothing to decode)")
+            return null
+        }
+
+        return try {
+            gson.fromJson(String(data), Movie::class.java)
+        } catch (e: Exception) {
+            Log.w(TAG, "decodeMovie: id=$downloadId FAILED to decode (${data.size} bytes) -- falling back to raw title", e)
+            val rawTitle = String(data).trim().ifBlank { "Downloaded video" }
+            runCatching { Movie(id = downloadId, title = rawTitle) }.getOrNull()
+        }
     }
 
     override suspend fun requestDownload(movie: Movie, isUnlocked: Boolean): DownloadRequestResult {
-        // Rule 1: free-trial users can only download movies the admin marked as free.
         val allowedByPlan = movie.isFree || isUnlocked
         if (!allowedByPlan) {
             return DownloadRequestResult.RequiresUnlock
         }
 
-        // Rule 2: respect the WiFi-only preference at the moment of the tap.
         val wifiOnlyRightNow = observeWifiOnly().first()
 
         if (wifiOnlyRightNow && !isOnWifi()) {
@@ -188,14 +206,11 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         if (movie.videoUrl.isBlank()) {
-            return DownloadRequestResult.RequiresUnlock // no playable source; nothing sensible to download
+            return DownloadRequestResult.RequiresUnlock
         }
 
         val request = DownloadRequest.Builder(movie.id, Uri.parse(movie.videoUrl))
             .setCustomCacheKey(movie.id)
-            // Store the FULL movie (not just the title) so the Downloads screen
-            // can render everything (thumbnail, year, language, etc.) purely from
-            // the download itself, with zero dependency on the live catalog.
             .setData(gson.toJson(movie).toByteArray())
             .build()
 
@@ -218,6 +233,18 @@ class DownloadRepositoryImpl @Inject constructor(
         )
     }
 
+    override fun clearAllDownloads() {
+        val downloadManager = DownloadUtil.getDownloadManager(context)
+        allDownloadsById(downloadManager).keys.forEach { id ->
+            DownloadService.sendRemoveDownload(
+                context,
+                MoviesForeverDownloadService::class.java,
+                id,
+                /* foreground = */ false
+            )
+        }
+    }
+
     private fun isOnWifi(): Boolean {
         val connectivityManager = context.getSystemService(ConnectivityManager::class.java) ?: return false
         val network = connectivityManager.activeNetwork ?: return false
@@ -231,5 +258,16 @@ class DownloadRepositoryImpl @Inject constructor(
         Download.STATE_FAILED -> MovieDownloadStatus.Failed
         Download.STATE_REMOVING -> MovieDownloadStatus.NotDownloaded
         else -> MovieDownloadStatus.Downloading(percentDownloaded.coerceIn(0f, 100f).toInt())
+    }
+
+    private fun stateName(state: Int): String = when (state) {
+        Download.STATE_QUEUED -> "QUEUED"
+        Download.STATE_STOPPED -> "STOPPED"
+        Download.STATE_DOWNLOADING -> "DOWNLOADING"
+        Download.STATE_COMPLETED -> "COMPLETED"
+        Download.STATE_FAILED -> "FAILED"
+        Download.STATE_REMOVING -> "REMOVING"
+        Download.STATE_RESTARTING -> "RESTARTING"
+        else -> "UNKNOWN($state)"
     }
 }

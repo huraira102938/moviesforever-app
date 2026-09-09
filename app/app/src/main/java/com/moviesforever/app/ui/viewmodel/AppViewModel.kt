@@ -1,5 +1,6 @@
 package com.moviesforever.app.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.moviesforever.app.data.model.AppConfig
@@ -35,6 +36,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val TAG = "MF_Download"
+
 data class AppUiState(
     val unlockInfo: UnlockInfo? = null,
     val pricing: PricingSettings = PricingSettings(),
@@ -43,22 +46,10 @@ data class AppUiState(
     val genres: List<Genre> = emptyList(),
     val banners: List<Banner> = emptyList(),
     val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
-    // Movie metadata captured at the moment each download was started, decoded
-    // straight from the Media3 download index (see
-    // DownloadRepository.observeDownloadedMovieInfo). Used -- instead of the
-    // live `movies` catalog -- to build downloadedMovies/downloadingMovies
-    // below, so a movie being removed/unpublished remotely (or a slow/flaky
-    // catalog fetch) can no longer make an already-downloaded, playable-offline
-    // file disappear from the Downloads screen.
     val downloadedMovieInfo: Map<String, Movie> = emptyMap(),
     val wifiOnlyDownloads: Boolean = true,
     val loading: Boolean = true,
-    // Full account record (JazzCash details, referral counts, payout
-    // amounts) for the Profile/Referral screens. Null until it's loaded, or
-    // if the user isn't unlocked.
     val account: UserAccount? = null,
-    // Live progress against the current bonus-deal campaign, if any is
-    // running right now.
     val bonusStatus: BonusStatus? = null,
     val apkShareUrl: String = ""
 ) {
@@ -73,17 +64,6 @@ data class AppUiState(
         .mapNotNull { downloadedMovieInfo[it.key] }
 }
 
-/**
- * Result of the LOCAL unlock check only (DataStore on disk). This is intentionally
- * kept separate from [AppUiState], which also waits on network calls (movies,
- * categories, pricing, etc via Firestore). Gating navigation on the combined
- * state caused an intermittent bug: on a cold start where Firestore's network
- * calls were slow to resolve, [AppUiState] would still be sitting at its default
- * (unlockInfo = null) when the splash screen made its routing decision, so
- * premium/lifetime users would incorrectly get sent to the Lock screen even
- * though their unlock info was already saved locally. Splash screen routing
- * must only depend on this fast, local-only signal.
- */
 sealed class UnlockCheckState {
     data object Loading : UnlockCheckState()
     data object Locked : UnlockCheckState()
@@ -106,12 +86,6 @@ class AppViewModel @Inject constructor(
 
     private val unlockRepositoryRef = unlockRepository
 
-    /**
-     * Fast, network-independent unlock signal for routing decisions (splash screen).
-     * Backed only by local DataStore, so it resolves quickly and reliably regardless
-     * of Firestore/network latency. See [UnlockCheckState] for why this exists
-     * separately from [uiState].
-     */
     val unlockCheckState: StateFlow<UnlockCheckState> = unlockRepository.observeUnlockInfo()
         .map { info -> if (info != null) UnlockCheckState.Unlocked(info) else UnlockCheckState.Locked }
         .stateIn(
@@ -127,22 +101,6 @@ class AppViewModel @Inject constructor(
         val banners: List<Banner>
     )
 
-    // Each of these is turned into its own hot StateFlow (via stateIn) BEFORE the
-    // final combine below. This matters: combine() only emits once every source
-    // has emitted at least once. If the network-backed sources (movies,
-    // categories, genres, banners, pricing) were combined directly as cold flows,
-    // the WHOLE uiState -- including unlockInfo, which is actually fast and local
-    // -- would sit at its default (unlockInfo = null) until those network calls
-    // finished. That caused a second instance of the same class of bug as the
-    // splash screen: HomeScreen would flash its "unlock lifetime pass" banner for
-    // ~1 second for premium users, right after the (correct) splash decision,
-    // because uiState.isUnlocked hadn't caught up yet.
-    //
-    // By pre-warming each source into its own StateFlow with an immediate cached
-    // initial value, the outer combine() can emit right away: content starts as
-    // empty lists (normal loading state, not a false "you're not premium" claim)
-    // while unlockCheckState -- which resolves in milliseconds -- is reflected
-    // correctly from the first emission.
     private val contentDataState: StateFlow<ContentData> = combine(
         moviesRepository.observeMovies(),
         categoriesRepository.observeCategories(),
@@ -170,8 +128,6 @@ class AppViewModel @Inject constructor(
             initialValue = emptyMap()
         )
 
-    // Movie metadata decoded straight from the Media3 download index -- see
-    // AppUiState.downloadedMovieInfo and DownloadRepository.observeDownloadedMovieInfo.
     private val downloadedMovieInfoState: StateFlow<Map<String, Movie>> =
         downloadRepository.observeDownloadedMovieInfo().stateIn(
             scope = viewModelScope,
@@ -179,11 +135,16 @@ class AppViewModel @Inject constructor(
             initialValue = emptyMap()
         )
 
-    // combine() only has direct overloads up to 5 flows, and baseUiState's
-    // combine below already uses all 5 slots -- so the two download-related
-    // flows are pre-combined into one Pair here first.
     private val downloadsCombinedState: StateFlow<Pair<Map<String, MovieDownloadStatus>, Map<String, Movie>>> =
-        combine(downloadStatusesState, downloadedMovieInfoState) { statuses, info -> statuses to info }
+        combine(downloadStatusesState, downloadedMovieInfoState) { statuses, info ->
+            val completedIds = statuses.filterValues { it is MovieDownloadStatus.Completed }.keys
+            val missingFromInfo = completedIds - info.keys
+            if (missingFromInfo.isNotEmpty()) {
+                Log.w(TAG, "[ViewModel] MISMATCH: completed in downloadStatuses but MISSING from downloadedMovieInfo: $missingFromInfo")
+            }
+            Log.d(TAG, "[ViewModel] combine: statuses=$statuses infoKeys=${info.keys}")
+            statuses to info
+        }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
@@ -197,12 +158,6 @@ class AppViewModel @Inject constructor(
             initialValue = true
         )
 
-    // Account + bonus data both key off the resolved unlock identity, so
-    // they re-subscribe via flatMapLatest whenever unlockCheckState changes
-    // (e.g. redeem() succeeding, or resetUnlock() clearing it). Both default
-    // to null while locked / not yet resolved rather than blocking the rest
-    // of uiState -- Profile/Referral simply show their "not unlocked" state
-    // until these arrive.
     private val accountState: StateFlow<UserAccount?> = unlockCheckState
         .flatMapLatest { check ->
             val info = (check as? UnlockCheckState.Unlocked)?.info
@@ -226,9 +181,6 @@ class AppViewModel @Inject constructor(
                 initialValue = null
             )
 
-    // Merges the raw deal+progress pair with this account's paid-out deal
-    // ids, so the UI gets one ready-to-render BonusStatus (including whether
-    // the currently active deal has already been settled for this user).
     private val bonusState: StateFlow<BonusStatus?> = combine(
         rawBonusState,
         accountState
@@ -279,10 +231,6 @@ class AppViewModel @Inject constructor(
         initialValue = AppUiState()
     )
 
-    // Second-stage combine layered on top of baseUiState so the carefully
-    // ordered combine above (see its comments re: splash-screen/home-banner
-    // flicker bugs) stays untouched. account/bonus/apkShareUrl are all
-    // "extra" fields that are fine to lag a beat behind on first load.
     val uiState: StateFlow<AppUiState> = combine(
         baseUiState,
         accountState,
@@ -312,12 +260,6 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Tries to download [movie] for offline playback.
-     * Callers get a [DownloadRequestResult] so they can show the right feedback:
-     * a paywall for locked+paid movies, or a "connect to WiFi" prompt when the
-     * WiFi-only setting is on and the device is on mobile data.
-     */
     fun downloadMovie(movie: Movie, onResult: (DownloadRequestResult) -> Unit) {
         viewModelScope.launch {
             val result = downloadRepository.requestDownload(movie, uiState.value.isUnlocked)

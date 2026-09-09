@@ -222,6 +222,7 @@ fun MoviesForeverNavHost(
                         pricing = uiState.pricing,
                         isUnlocked = uiState.isUnlocked,
                         genres = uiState.genres.associate { it.id to it.name },
+                        downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = {
                             val isAllowed = movie.isFree || uiState.isUnlocked
                             if (isAllowed) {
