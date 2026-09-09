@@ -147,15 +147,38 @@ fun HomeScreen(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Unit) {
-    val pagerState = rememberPagerState(pageCount = { banners.size })
+    val actualCount = banners.size
+    val isLooping = actualCount > 1
 
-    // Auto-scroll logic: Loops endlessly every 3 seconds
-    LaunchedEffect(banners.size) {
-        if (banners.size > 1) {
-            while (true) {
-                delay(3000) // Wait 3 seconds
-                val nextPage = (pagerState.currentPage + 1) % banners.size
-                pagerState.animateScrollToPage(nextPage)
+    // Small, fixed virtual count — plenty for looping, cheap to measure.
+    // e.g. with 4 banners this gives 100 "laps" before it resets.
+    val virtualPageCount = if (isLooping) actualCount * 25 else actualCount
+
+    val startPage = if (isLooping) {
+        // Start in the middle lap, aligned to a real banner index (page 0)
+        val midLap = (virtualPageCount / actualCount) / 2
+        midLap * actualCount
+    } else 0
+
+    val pagerState = rememberPagerState(
+        initialPage = startPage,
+        pageCount = { virtualPageCount }
+    )
+
+    val currentRealIndex = pagerState.currentPage % actualCount
+
+    LaunchedEffect(actualCount) {
+        if (!isLooping) return@LaunchedEffect
+        while (true) {
+            delay(3000)
+            val next = pagerState.currentPage + 1
+            if (next < virtualPageCount - 1) {
+                pagerState.animateScrollToPage(next)
+            } else {
+                // Near the end of our virtual range: jump back to an
+                // aligned page instantly (same real banner, invisible to user),
+                // then continue looping forward from there.
+                pagerState.scrollToPage(startPage)
             }
         }
     }
@@ -169,7 +192,7 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
                 .fillMaxWidth()
                 .height(210.dp)
         ) { page ->
-            val banner = banners[page]
+            val banner = banners[page % actualCount]
             Card(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier
@@ -185,7 +208,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Gradient overlay for bottom text contrast
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -203,7 +225,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
                     if (!banner.clickable) {
 
                     } else {
-                        // Badge & Watch Action Callout
                         Row(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
@@ -252,16 +273,15 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
             }
         }
 
-        // Pager Indicators
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 10.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            repeat(banners.size) { iteration ->
-                val color = if (pagerState.currentPage == iteration) Gold else DarkElevated
-                val width = if (pagerState.currentPage == iteration) 18.dp else 6.dp
+            repeat(actualCount) { iteration ->
+                val color = if (currentRealIndex == iteration) Gold else DarkElevated
+                val width = if (currentRealIndex == iteration) 18.dp else 6.dp
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 2.dp)

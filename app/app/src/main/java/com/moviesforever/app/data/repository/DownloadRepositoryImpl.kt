@@ -13,6 +13,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
+import com.google.gson.Gson
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.download.DownloadUtil
 import com.moviesforever.app.download.MoviesForeverDownloadService
@@ -39,6 +40,8 @@ class DownloadRepositoryImpl @Inject constructor(
     private object Keys {
         val WIFI_ONLY = booleanPreferencesKey("wifi_only_downloads")
     }
+
+    private val gson = Gson()
 
     override fun observeWifiOnly(): Flow<Boolean> {
         return context.downloadSettingsStore.data.map { prefs ->
@@ -118,6 +121,58 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeDownloadedMovieInfo(): Flow<Map<String, Movie>> = callbackFlow {
+        val downloadManager = DownloadUtil.getDownloadManager(context)
+
+        // Decode movie metadata directly from each persisted download request.
+        // This is deliberately independent of the live (Firestore) movie catalog:
+        // a movie that's been unpublished/removed remotely, or a catalog fetch
+        // that's slow/failed/incomplete, must never make an already-downloaded,
+        // playable-offline file disappear from "My Downloads".
+        fun snapshot(): Map<String, Movie> {
+            return downloadManager.currentDownloads.mapNotNull { download ->
+                decodeMovie(download.request.data)?.let { movie -> download.request.id to movie }
+            }.toMap()
+        }
+
+        trySend(snapshot())
+
+        val listener = object : androidx.media3.exoplayer.offline.DownloadManager.Listener {
+            override fun onInitialized(downloadManager: androidx.media3.exoplayer.offline.DownloadManager) {
+                trySend(snapshot())
+            }
+
+            override fun onDownloadChanged(
+                downloadManager: androidx.media3.exoplayer.offline.DownloadManager,
+                download: Download,
+                finalException: Exception?
+            ) {
+                trySend(snapshot())
+            }
+
+            override fun onDownloadRemoved(
+                downloadManager: androidx.media3.exoplayer.offline.DownloadManager,
+                download: Download
+            ) {
+                trySend(snapshot())
+            }
+        }
+        downloadManager.addListener(listener)
+
+        awaitClose {
+            downloadManager.removeListener(listener)
+        }
+    }
+
+    private fun decodeMovie(data: ByteArray): Movie? = try {
+        gson.fromJson(String(data), Movie::class.java)
+    } catch (e: Exception) {
+        // Downloads started before this change only stored the movie title as raw
+        // bytes (not JSON). Fail gracefully rather than crash -- those old
+        // downloads simply won't appear until re-downloaded; this never throws.
+        null
+    }
+
     override suspend fun requestDownload(movie: Movie, isUnlocked: Boolean): DownloadRequestResult {
         // Rule 1: free-trial users can only download movies the admin marked as free.
         val allowedByPlan = movie.isFree || isUnlocked
@@ -138,7 +193,10 @@ class DownloadRepositoryImpl @Inject constructor(
 
         val request = DownloadRequest.Builder(movie.id, Uri.parse(movie.videoUrl))
             .setCustomCacheKey(movie.id)
-            .setData(movie.title.toByteArray())
+            // Store the FULL movie (not just the title) so the Downloads screen
+            // can render everything (thumbnail, year, language, etc.) purely from
+            // the download itself, with zero dependency on the live catalog.
+            .setData(gson.toJson(movie).toByteArray())
             .build()
 
         DownloadService.sendAddDownload(

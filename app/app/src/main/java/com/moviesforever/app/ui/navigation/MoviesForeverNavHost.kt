@@ -308,7 +308,11 @@ fun MoviesForeverNavHost(
                 ReferralScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
+                    account = uiState.account,
+                    bonusStatus = uiState.bonusStatus,
+                    apkShareUrl = uiState.apkShareUrl,
                     onShare = { text -> shareText(context, text) },
+                    onShareApk = { text -> shareText(context, text) },
                     onBack = { navController.popBackStackSafe() }
                 )
             }
@@ -373,9 +377,11 @@ private fun MainScaffoldWithTabs(
                 )
                 2 -> DownloadsScreen(
                     downloadedMovies = uiState.downloadedMovies,
-                    downloadingMovies = uiState.movies.filter {
-                        uiState.downloadStatuses[it.id] is com.moviesforever.app.data.repository.MovieDownloadStatus.Downloading
-                    },
+                    // Built purely from the download system (see AppUiState), not
+                    // by intersecting with the live movie catalog -- this is what
+                    // keeps in-progress/completed downloads visible even if a
+                    // movie has been removed/unpublished remotely.
+                    downloadingMovies = uiState.downloadingMovies,
                     downloadStatuses = uiState.downloadStatuses,
                     isUnlocked = uiState.isUnlocked,
                     onMovieClick = { movie ->
@@ -387,7 +393,11 @@ private fun MainScaffoldWithTabs(
                 3 -> ProfileScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
+                    account = uiState.account,
+                    bonusStatus = uiState.bonusStatus,
+                    apkShareUrl = uiState.apkShareUrl,
                     onShareReferral = { text -> shareText(context, text) },
+                    onShareApk = { text -> shareText(context, text) },
                     onReferralClick = { navController.navigate(Screen.Referral.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) }

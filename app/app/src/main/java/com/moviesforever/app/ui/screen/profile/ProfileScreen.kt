@@ -26,8 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moviesforever.app.data.model.BonusStatus
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.UnlockInfo
+import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
 
@@ -35,7 +37,11 @@ import com.moviesforever.app.ui.theme.*
 fun ProfileScreen(
     unlockInfo: UnlockInfo?,
     pricing: PricingSettings,
+    account: UserAccount? = null,
+    bonusStatus: BonusStatus? = null,
+    apkShareUrl: String = "",
     onShareReferral: (String) -> Unit,
+    onShareApk: (String) -> Unit = {},
     onReferralClick: () -> Unit,
     onSettings: () -> Unit,
     onUnlockClick: () -> Unit
@@ -213,9 +219,31 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // My Referrals Row
+            if (apkShareUrl.isNotBlank()) {
+                OutlinedButton(
+                    onClick = {
+                        val text = "Download MoviesForever and watch unlimited movies! Get the app here: $apkShareUrl" +
+                            if (!unlockInfo?.username.isNullOrBlank()) "\n\nWhen you unlock, use my referral username \"${unlockInfo?.username}\" so I earn a reward too. 🎬💰" else ""
+                        onShareApk(text)
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Gold),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Share App (APK Link)")
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            // My Referrals Row -- with a quick-glance summary so this row
+            // isn't just a bare link; full detail lives on the Referral screen.
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
                 shape = RoundedCornerShape(14.dp),
@@ -224,25 +252,46 @@ fun ProfileScreen(
                     .border(1.dp, DarkElevated, RoundedCornerShape(14.dp))
                     .clickable(onClick = onReferralClick)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Group,
-                        contentDescription = null,
-                        tint = Gold,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text("My Referrals", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.weight(1f))
-                    Icon(
-                        imageVector = Icons.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = TextMuted,
-                        modifier = Modifier.size(22.dp)
-                    )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Group,
+                            contentDescription = null,
+                            tint = Gold,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("My Referrals", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        MiniStat(
+                            label = "Referred",
+                            value = "${account?.referralCount ?: 0}",
+                            modifier = Modifier.weight(1f)
+                        )
+                        MiniStat(
+                            label = "Pending",
+                            value = "PKR ${(account?.generalPendingAmount ?: 0.0).toInt()}",
+                            valueColor = Warning,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (bonusStatus != null && !bonusStatus.alreadyPaidOut) {
+                            MiniStat(
+                                label = if (bonusStatus.isTargetReached) "Bonus" else "Bonus left",
+                                value = if (bonusStatus.isTargetReached) "Unlocked!" else "${bonusStatus.unlocksRemaining}",
+                                valueColor = Gold,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -371,5 +420,19 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MiniStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = TextPrimary
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = TextMuted, fontSize = 10.5.sp)
     }
 }

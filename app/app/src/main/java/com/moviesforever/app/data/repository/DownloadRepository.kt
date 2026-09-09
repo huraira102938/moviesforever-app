@@ -24,6 +24,21 @@ interface DownloadRepository {
     /** Map of movieId -> current download status, updated live as downloads progress. */
     fun observeDownloadStatuses(): Flow<Map<String, MovieDownloadStatus>>
 
+    /**
+     * Movie metadata captured at the moment each download was started, keyed by
+     * movieId. Decoded straight from the persisted Media3 download request -- this
+     * is the source of truth for what to display in "My Downloads", and it does
+     * NOT depend on the movie still being present in the live catalog (Firestore).
+     *
+     * This is what fixes the bug where a fully-downloaded, playable-offline movie
+     * would vanish from the Downloads screen: previously the UI built its list by
+     * intersecting download status with the *current* remote movie catalog fetch,
+     * so removing/unpublishing a movie, or any hiccup in that one-shot network
+     * call, silently dropped an already-downloaded file from the list even though
+     * it was still sitting on disk and playable.
+     */
+    fun observeDownloadedMovieInfo(): Flow<Map<String, Movie>>
+
     /** Whether downloads should be restricted to WiFi. Defaults to true (safer for user's data plan). */
     fun observeWifiOnly(): Flow<Boolean>
 

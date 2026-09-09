@@ -2,13 +2,20 @@ package com.moviesforever.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.moviesforever.app.data.model.AppConfig
 import com.moviesforever.app.data.model.Banner
+import com.moviesforever.app.data.model.BonusDeal
+import com.moviesforever.app.data.model.BonusStatus
 import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.UnlockInfo
+import com.moviesforever.app.data.model.UserAccount
+import com.moviesforever.app.data.repository.AccountRepository
+import com.moviesforever.app.data.repository.AppConfigRepository
 import com.moviesforever.app.data.repository.BannersRepository
+import com.moviesforever.app.data.repository.BonusRepository
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRequestResult
@@ -21,6 +28,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -34,11 +43,34 @@ data class AppUiState(
     val genres: List<Genre> = emptyList(),
     val banners: List<Banner> = emptyList(),
     val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
+    // Movie metadata captured at the moment each download was started, decoded
+    // straight from the Media3 download index (see
+    // DownloadRepository.observeDownloadedMovieInfo). Used -- instead of the
+    // live `movies` catalog -- to build downloadedMovies/downloadingMovies
+    // below, so a movie being removed/unpublished remotely (or a slow/flaky
+    // catalog fetch) can no longer make an already-downloaded, playable-offline
+    // file disappear from the Downloads screen.
+    val downloadedMovieInfo: Map<String, Movie> = emptyMap(),
     val wifiOnlyDownloads: Boolean = true,
-    val loading: Boolean = true
+    val loading: Boolean = true,
+    // Full account record (JazzCash details, referral counts, payout
+    // amounts) for the Profile/Referral screens. Null until it's loaded, or
+    // if the user isn't unlocked.
+    val account: UserAccount? = null,
+    // Live progress against the current bonus-deal campaign, if any is
+    // running right now.
+    val bonusStatus: BonusStatus? = null,
+    val apkShareUrl: String = ""
 ) {
     val isUnlocked: Boolean get() = unlockInfo != null
-    val downloadedMovies: List<Movie> get() = movies.filter { downloadStatuses[it.id] is MovieDownloadStatus.Completed }
+
+    val downloadedMovies: List<Movie> get() = downloadStatuses.entries
+        .filter { it.value is MovieDownloadStatus.Completed }
+        .mapNotNull { downloadedMovieInfo[it.key] }
+
+    val downloadingMovies: List<Movie> get() = downloadStatuses.entries
+        .filter { it.value is MovieDownloadStatus.Downloading }
+        .mapNotNull { downloadedMovieInfo[it.key] }
 }
 
 /**
@@ -66,6 +98,9 @@ class AppViewModel @Inject constructor(
     bannersRepository: BannersRepository,
     pricingRepository: PricingRepository,
     unlockRepository: UnlockRepository,
+    accountRepository: AccountRepository,
+    bonusRepository: BonusRepository,
+    appConfigRepository: AppConfigRepository,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
@@ -135,6 +170,26 @@ class AppViewModel @Inject constructor(
             initialValue = emptyMap()
         )
 
+    // Movie metadata decoded straight from the Media3 download index -- see
+    // AppUiState.downloadedMovieInfo and DownloadRepository.observeDownloadedMovieInfo.
+    private val downloadedMovieInfoState: StateFlow<Map<String, Movie>> =
+        downloadRepository.observeDownloadedMovieInfo().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
+    // combine() only has direct overloads up to 5 flows, and baseUiState's
+    // combine below already uses all 5 slots -- so the two download-related
+    // flows are pre-combined into one Pair here first.
+    private val downloadsCombinedState: StateFlow<Pair<Map<String, MovieDownloadStatus>, Map<String, Movie>>> =
+        combine(downloadStatusesState, downloadedMovieInfoState) { statuses, info -> statuses to info }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyMap<String, MovieDownloadStatus>() to emptyMap()
+            )
+
     private val wifiOnlyState: StateFlow<Boolean> = downloadRepository.observeWifiOnly()
         .stateIn(
             scope = viewModelScope,
@@ -142,13 +197,70 @@ class AppViewModel @Inject constructor(
             initialValue = true
         )
 
-    val uiState: StateFlow<AppUiState> = combine(
+    // Account + bonus data both key off the resolved unlock identity, so
+    // they re-subscribe via flatMapLatest whenever unlockCheckState changes
+    // (e.g. redeem() succeeding, or resetUnlock() clearing it). Both default
+    // to null while locked / not yet resolved rather than blocking the rest
+    // of uiState -- Profile/Referral simply show their "not unlocked" state
+    // until these arrive.
+    private val accountState: StateFlow<UserAccount?> = unlockCheckState
+        .flatMapLatest { check ->
+            val info = (check as? UnlockCheckState.Unlocked)?.info
+            if (info != null) accountRepository.observeAccount(info.id) else flowOf(null)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    private val rawBonusState: StateFlow<Pair<BonusDeal, Int>?> =
+        unlockCheckState
+            .flatMapLatest { check ->
+                val info = (check as? UnlockCheckState.Unlocked)?.info
+                if (info != null) bonusRepository.observeActiveDealProgress(info.username) else flowOf(null)
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = null
+            )
+
+    // Merges the raw deal+progress pair with this account's paid-out deal
+    // ids, so the UI gets one ready-to-render BonusStatus (including whether
+    // the currently active deal has already been settled for this user).
+    private val bonusState: StateFlow<BonusStatus?> = combine(
+        rawBonusState,
+        accountState
+    ) { dealProgress, account ->
+        dealProgress?.let { (deal, achieved) ->
+            BonusStatus(
+                deal = deal,
+                unlocksAchieved = achieved,
+                alreadyPaidOut = account?.bonusPaidDealIds?.contains(deal.id) == true
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
+
+    private val appConfigState: StateFlow<AppConfig> = appConfigRepository.observeAppConfig()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AppConfig()
+        )
+
+    private val baseUiState: StateFlow<AppUiState> = combine(
         unlockCheckState,
         pricingState,
         contentDataState,
-        downloadStatusesState,
+        downloadsCombinedState,
         wifiOnlyState
-    ) { unlockCheck, pricing, content, downloadStatuses, wifiOnly ->
+    ) { unlockCheck, pricing, content, downloadsCombined, wifiOnly ->
+        val (downloadStatuses, downloadedMovieInfo) = downloadsCombined
         AppUiState(
             unlockInfo = (unlockCheck as? UnlockCheckState.Unlocked)?.info,
             pricing = pricing,
@@ -157,8 +269,30 @@ class AppViewModel @Inject constructor(
             genres = content.genres,
             banners = content.banners,
             downloadStatuses = downloadStatuses,
+            downloadedMovieInfo = downloadedMovieInfo,
             wifiOnlyDownloads = wifiOnly,
             loading = unlockCheck is UnlockCheckState.Loading
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AppUiState()
+    )
+
+    // Second-stage combine layered on top of baseUiState so the carefully
+    // ordered combine above (see its comments re: splash-screen/home-banner
+    // flicker bugs) stays untouched. account/bonus/apkShareUrl are all
+    // "extra" fields that are fine to lag a beat behind on first load.
+    val uiState: StateFlow<AppUiState> = combine(
+        baseUiState,
+        accountState,
+        bonusState,
+        appConfigState
+    ) { base, account, bonus, appConfig ->
+        base.copy(
+            account = account,
+            bonusStatus = bonus,
+            apkShareUrl = appConfig.apkShareUrl
         )
     }.stateIn(
         scope = viewModelScope,

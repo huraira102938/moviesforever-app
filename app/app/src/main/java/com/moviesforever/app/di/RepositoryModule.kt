@@ -1,7 +1,13 @@
 package com.moviesforever.app.di
 
+import com.moviesforever.app.data.repository.AccountRepository
+import com.moviesforever.app.data.repository.AccountRepositoryImpl
+import com.moviesforever.app.data.repository.AppConfigRepository
+import com.moviesforever.app.data.repository.AppConfigRepositoryImpl
 import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.BannersRepositoryImpl
+import com.moviesforever.app.data.repository.BonusRepository
+import com.moviesforever.app.data.repository.BonusRepositoryImpl
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.CategoriesRepositoryImpl
 import com.moviesforever.app.data.repository.DownloadRepository
@@ -57,4 +63,16 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDownloadRepository(impl: DownloadRepositoryImpl): DownloadRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAccountRepository(impl: AccountRepositoryImpl): AccountRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindBonusRepository(impl: BonusRepositoryImpl): BonusRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppConfigRepository(impl: AppConfigRepositoryImpl): AppConfigRepository
 }
