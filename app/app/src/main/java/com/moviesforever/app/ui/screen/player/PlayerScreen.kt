@@ -59,8 +59,13 @@ import com.moviesforever.app.ui.theme.Gold
 import com.moviesforever.app.ui.theme.TextPrimary
 import java.util.Locale
 import kotlinx.coroutines.delay
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 private const val TAG = "PlayerScreen"
+
 
 fun Context.findActivity(): Activity? {
     var currentContext = this
@@ -192,6 +197,27 @@ fun PlayerScreen(
                 prepare()
                 playWhenReady = true
             }
+    }
+
+    // Immersive mode: hide the status bar and gesture-nav bar while the player
+    // is on screen, restoring them the moment this screen is left. Without
+    // this, the notification bar and the bottom gesture pill stay visible the
+    // whole time, which is distracting for a full-screen video player. Swiping
+    // from an edge still temporarily reveals the bars (BEHAVIOR_SHOW_TRANSIENT_
+    // BARS_BY_SWIPE), same as YouTube/Netflix, so the user isn't ever fully
+    // locked out of system gestures.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = activity?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
+        insetsController?.apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+        onDispose {
+            window?.let { WindowCompat.getInsetsController(it, view) }
+                ?.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     // Listen for available tracks (Text and Audio) + playback errors
@@ -712,6 +738,60 @@ fun PlayerScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(track.label, color = TextPrimary, fontSize = 14.sp)
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+
+        // Aspect Ratio / Resize Mode Selection Dialog
+        if (showAspectRatioDialog) {
+            Dialog(onDismissRequest = { showAspectRatioDialog = false }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .background(DarkSurface, RoundedCornerShape(16.dp))
+                        .padding(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = "Video Fit",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(Modifier.height(14.dp))
+
+                        resizeModeOptions.forEachIndexed { index, option ->
+                            if (index > 0) {
+                                HorizontalDivider(color = DarkElevated)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        currentResizeMode = option.mode
+                                        showAspectRatioDialog = false
+                                    }
+                                    .padding(vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = currentResizeMode == option.mode,
+                                    onClick = {
+                                        currentResizeMode = option.mode
+                                        showAspectRatioDialog = false
+                                    },
+                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(option.label, color = TextPrimary, fontSize = 14.sp)
                             }
                         }
                     }
