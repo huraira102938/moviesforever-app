@@ -14,9 +14,8 @@ class AccountRepositoryImpl @Inject constructor(
 ) : AccountRepository {
 
     // Live listener (not a one-shot get()) because this data changes the
-    // moment the admin verifies a payment or settles a payout -- the
-    // Profile/Referral screens should reflect that without the user having
-    // to force-close and reopen the app.
+    // moment the admin verifies a payment -- referralCount, payment details,
+    // etc should update in the app without a force-close/reopen.
     override fun observeAccount(userId: String): Flow<UserAccount?> = callbackFlow {
         if (userId.isBlank()) {
             trySend(null)
@@ -37,13 +36,12 @@ class AccountRepositoryImpl @Inject constructor(
                         username = data["username"] as? String ?: "",
                         realName = data["realName"] as? String ?: "",
                         phoneNumber = data["phoneNumber"] as? String ?: "",
+                        paymentMethod = data["paymentMethod"] as? String ?: "",
+                        paymentNumber = data["paymentNumber"] as? String ?: "",
+                        accountTitle = data["accountTitle"] as? String ?: "",
                         jazzCashNumber = data["jazzCashNumber"] as? String ?: "",
                         jazzCashTitle = data["jazzCashTitle"] as? String ?: "",
-                        referralCount = (data["referralCount"] as? Number)?.toInt() ?: 0,
-                        generalPendingAmount = (data["generalPendingAmount"] as? Number)?.toDouble() ?: 0.0,
-                        generalPaidAmount = (data["generalPaidAmount"] as? Number)?.toDouble() ?: 0.0,
-                        bonusPaidDealIds = (data["bonusPaidDealIds"] as? List<*>)
-                            ?.mapNotNull { it as? String } ?: emptyList()
+                        referralCount = (data["referralCount"] as? Number)?.toInt() ?: 0
                     )
                 )
             }

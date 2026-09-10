@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
@@ -21,15 +22,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.moviesforever.app.data.model.BonusStatus
+import android.widget.Toast
+import com.moviesforever.app.data.model.AppShareLink
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.data.model.ReferralEarnings
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
+import com.moviesforever.app.data.model.buildShareMessage
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
 
@@ -38,9 +44,8 @@ fun ProfileScreen(
     unlockInfo: UnlockInfo?,
     pricing: PricingSettings,
     account: UserAccount? = null,
-    bonusStatus: BonusStatus? = null,
-    apkShareUrl: String = "",
-    onShareReferral: (String) -> Unit,
+    earnings: ReferralEarnings = ReferralEarnings(),
+    appShareLink: AppShareLink? = null,
     onShareApk: (String) -> Unit = {},
     onReferralClick: () -> Unit,
     onSettings: () -> Unit,
@@ -48,6 +53,7 @@ fun ProfileScreen(
 ) {
     val isUnlocked = unlockInfo != null
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val scrollState = rememberScrollState()
 
     Column(
@@ -188,30 +194,47 @@ fun ProfileScreen(
 
                         Spacer(Modifier.height(14.dp))
 
-                        // Referral Code Display
-                        Box(
+                        // Referral Code Display (tap the copy icon to copy)
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Black.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
-                                .padding(12.dp)
+                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = "@${unlockInfo?.username ?: ""}",
                                 color = Black,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.weight(1f)
                             )
+                            IconButton(
+                                onClick = {
+                                    unlockInfo?.username?.let { username ->
+                                        clipboard.setText(AnnotatedString(username))
+                                        Toast.makeText(context, "Username copied!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ContentCopy,
+                                    contentDescription = "Copy username",
+                                    tint = Black,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
 
                         Spacer(Modifier.height(14.dp))
 
                         GoldButton(
-                            text = "Share & Earn Now",
+                            text = "Share App & Earn Money",
+                            enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
                             onClick = {
-                                val text = "Watch unlimited movies on MoviesForever! Pay once, unlock forever. Use my referral username: ${unlockInfo?.username}. Earn PKR ${pricing.referralPayout.toInt()} when I refer you! 💰🎬"
-                                onShareReferral(text)
+                                appShareLink?.let { link ->
+                                    onShareApk(link.buildShareMessage(unlockInfo?.username))
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -219,28 +242,7 @@ fun ProfileScreen(
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-
-            if (apkShareUrl.isNotBlank()) {
-                OutlinedButton(
-                    onClick = {
-                        val text = "Download MoviesForever and watch unlimited movies! Get the app here: $apkShareUrl" +
-                            if (!unlockInfo?.username.isNullOrBlank()) "\n\nWhen you unlock, use my referral username \"${unlockInfo?.username}\" so I earn a reward too. 🎬💰" else ""
-                        onShareApk(text)
-                    },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Gold),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Gold),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Share App (APK Link)")
-                }
-                Spacer(Modifier.height(10.dp))
-            }
-
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(14.dp))
 
             // My Referrals Row -- with a quick-glance summary so this row
             // isn't just a bare link; full detail lives on the Referral screen.
@@ -279,18 +281,16 @@ fun ProfileScreen(
                         )
                         MiniStat(
                             label = "Pending",
-                            value = "PKR ${(account?.generalPendingAmount ?: 0.0).toInt()}",
+                            value = "PKR ${earnings.pendingAmount.toInt()}",
                             valueColor = Warning,
                             modifier = Modifier.weight(1f)
                         )
-                        if (bonusStatus != null && !bonusStatus.alreadyPaidOut) {
-                            MiniStat(
-                                label = if (bonusStatus.isTargetReached) "Bonus" else "Bonus left",
-                                value = if (bonusStatus.isTargetReached) "Unlocked!" else "${bonusStatus.unlocksRemaining}",
-                                valueColor = Gold,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        MiniStat(
+                            label = "Paid",
+                            value = "PKR ${earnings.paidAmount.toInt()}",
+                            valueColor = Success,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

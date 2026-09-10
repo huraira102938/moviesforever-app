@@ -13,8 +13,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moviesforever.app.data.model.AppShareLink
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.UnlockInfo
+import com.moviesforever.app.data.model.buildShareMessage
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
 
@@ -26,6 +28,7 @@ import com.moviesforever.app.ui.theme.*
 fun CelebrationScreen(
     unlockInfo: UnlockInfo?,
     pricing: PricingSettings,
+    appShareLink: AppShareLink?,
     onShare: (String) -> Unit,
     onStartWatching: () -> Unit
 ) {
@@ -101,10 +104,12 @@ fun CelebrationScreen(
                         )
                         Spacer(Modifier.height(14.dp))
                         GoldButton(
-                            text = "Share Now & Earn",
+                            text = "Share App & Earn Money",
+                            enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
                             onClick = {
-                                val text = "Watch unlimited movies on MoviesForever! Use my referral @${unlockInfo?.username} — I earn PKR ${pricing.referralPayout.toInt()} when you unlock! 🎬"
-                                onShare(text)
+                                appShareLink?.let { link ->
+                                    onShare(link.buildShareMessage(unlockInfo?.username))
+                                }
                             },
                             modifier = Modifier.fillMaxWidth()
                         )

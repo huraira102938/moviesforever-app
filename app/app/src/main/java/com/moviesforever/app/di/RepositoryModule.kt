@@ -2,12 +2,10 @@ package com.moviesforever.app.di
 
 import com.moviesforever.app.data.repository.AccountRepository
 import com.moviesforever.app.data.repository.AccountRepositoryImpl
-import com.moviesforever.app.data.repository.AppConfigRepository
-import com.moviesforever.app.data.repository.AppConfigRepositoryImpl
+import com.moviesforever.app.data.repository.AppShareRepository
+import com.moviesforever.app.data.repository.AppShareRepositoryImpl
 import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.BannersRepositoryImpl
-import com.moviesforever.app.data.repository.BonusRepository
-import com.moviesforever.app.data.repository.BonusRepositoryImpl
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.CategoriesRepositoryImpl
 import com.moviesforever.app.data.repository.DownloadRepository
@@ -20,6 +18,8 @@ import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.PricingRepositoryImpl
 import com.moviesforever.app.data.repository.RedemptionRepository
 import com.moviesforever.app.data.repository.RedemptionRepositoryImpl
+import com.moviesforever.app.data.repository.ReferralEarningsRepository
+import com.moviesforever.app.data.repository.ReferralEarningsRepositoryImpl
 import com.moviesforever.app.data.repository.UnlockRepository
 import com.moviesforever.app.data.repository.UnlockRepositoryImpl
 import dagger.Binds
@@ -70,9 +70,9 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindBonusRepository(impl: BonusRepositoryImpl): BonusRepository
+    abstract fun bindReferralEarningsRepository(impl: ReferralEarningsRepositoryImpl): ReferralEarningsRepository
 
     @Binds
     @Singleton
-    abstract fun bindAppConfigRepository(impl: AppConfigRepositoryImpl): AppConfigRepository
+    abstract fun bindAppShareRepository(impl: AppShareRepositoryImpl): AppShareRepository
 }

@@ -198,6 +198,7 @@ fun MoviesForeverNavHost(
                 CelebrationScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
+                    appShareLink = uiState.appShareLink,
                     onShare = { text -> shareText(context, text) },
                     onStartWatching = {
                         viewModel.markCelebrationShown()
@@ -310,9 +311,8 @@ fun MoviesForeverNavHost(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
                     account = uiState.account,
-                    bonusStatus = uiState.bonusStatus,
-                    apkShareUrl = uiState.apkShareUrl,
-                    onShare = { text -> shareText(context, text) },
+                    earnings = uiState.earnings,
+                    appShareLink = uiState.appShareLink,
                     onShareApk = { text -> shareText(context, text) },
                     onBack = { navController.popBackStackSafe() }
                 )
@@ -395,9 +395,8 @@ private fun MainScaffoldWithTabs(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
                     account = uiState.account,
-                    bonusStatus = uiState.bonusStatus,
-                    apkShareUrl = uiState.apkShareUrl,
-                    onShareReferral = { text -> shareText(context, text) },
+                    earnings = uiState.earnings,
+                    appShareLink = uiState.appShareLink,
                     onShareApk = { text -> shareText(context, text) },
                     onReferralClick = { navController.navigate(Screen.Referral.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) },

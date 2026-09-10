@@ -3,20 +3,18 @@ package com.moviesforever.app.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.moviesforever.app.data.model.AppConfig
+import com.moviesforever.app.data.model.AppShareLink
 import com.moviesforever.app.data.model.Banner
-import com.moviesforever.app.data.model.BonusDeal
-import com.moviesforever.app.data.model.BonusStatus
 import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.data.model.ReferralEarnings
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.repository.AccountRepository
-import com.moviesforever.app.data.repository.AppConfigRepository
+import com.moviesforever.app.data.repository.AppShareRepository
 import com.moviesforever.app.data.repository.BannersRepository
-import com.moviesforever.app.data.repository.BonusRepository
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRequestResult
@@ -24,6 +22,7 @@ import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.PricingRepository
+import com.moviesforever.app.data.repository.ReferralEarningsRepository
 import com.moviesforever.app.data.repository.UnlockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,8 +49,8 @@ data class AppUiState(
     val wifiOnlyDownloads: Boolean = true,
     val loading: Boolean = true,
     val account: UserAccount? = null,
-    val bonusStatus: BonusStatus? = null,
-    val apkShareUrl: String = ""
+    val earnings: ReferralEarnings = ReferralEarnings(),
+    val appShareLink: AppShareLink? = null
 ) {
     val isUnlocked: Boolean get() = unlockInfo != null
 
@@ -79,8 +78,8 @@ class AppViewModel @Inject constructor(
     pricingRepository: PricingRepository,
     unlockRepository: UnlockRepository,
     accountRepository: AccountRepository,
-    bonusRepository: BonusRepository,
-    appConfigRepository: AppConfigRepository,
+    referralEarningsRepository: ReferralEarningsRepository,
+    appShareRepository: AppShareRepository,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
@@ -169,40 +168,22 @@ class AppViewModel @Inject constructor(
             initialValue = null
         )
 
-    private val rawBonusState: StateFlow<Pair<BonusDeal, Int>?> =
-        unlockCheckState
-            .flatMapLatest { check ->
-                val info = (check as? UnlockCheckState.Unlocked)?.info
-                if (info != null) bonusRepository.observeActiveDealProgress(info.username) else flowOf(null)
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = null
-            )
-
-    private val bonusState: StateFlow<BonusStatus?> = combine(
-        rawBonusState,
-        accountState
-    ) { dealProgress, account ->
-        dealProgress?.let { (deal, achieved) ->
-            BonusStatus(
-                deal = deal,
-                unlocksAchieved = achieved,
-                alreadyPaidOut = account?.bonusPaidDealIds?.contains(deal.id) == true
-            )
+    private val earningsState: StateFlow<ReferralEarnings> = unlockCheckState
+        .flatMapLatest { check ->
+            val info = (check as? UnlockCheckState.Unlocked)?.info
+            if (info != null) referralEarningsRepository.observeEarnings(info.username) else flowOf(ReferralEarnings())
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
-
-    private val appConfigState: StateFlow<AppConfig> = appConfigRepository.observeAppConfig()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppConfig()
+            initialValue = ReferralEarnings()
+        )
+
+    private val appShareLinkState: StateFlow<AppShareLink?> = appShareRepository.observeCurrentShareLink()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
         )
 
     private val baseUiState: StateFlow<AppUiState> = combine(
@@ -234,13 +215,13 @@ class AppViewModel @Inject constructor(
     val uiState: StateFlow<AppUiState> = combine(
         baseUiState,
         accountState,
-        bonusState,
-        appConfigState
-    ) { base, account, bonus, appConfig ->
+        earningsState,
+        appShareLinkState
+    ) { base, account, earnings, appShareLink ->
         base.copy(
             account = account,
-            bonusStatus = bonus,
-            apkShareUrl = appConfig.apkShareUrl
+            earnings = earnings,
+            appShareLink = appShareLink
         )
     }.stateIn(
         scope = viewModelScope,
