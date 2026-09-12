@@ -41,7 +41,9 @@ class AccountRepositoryImpl @Inject constructor(
                         accountTitle = data["accountTitle"] as? String ?: "",
                         jazzCashNumber = data["jazzCashNumber"] as? String ?: "",
                         jazzCashTitle = data["jazzCashTitle"] as? String ?: "",
-                        referralCount = (data["referralCount"] as? Number)?.toInt() ?: 0
+                        referralCount = (data["referralCount"] as? Number)?.toInt() ?: 0,
+                        paused = data["paused"] as? Boolean ?: false,
+                        pauseUserNote = data["pauseUserNote"] as? String ?: ""
                     )
                 )
             }

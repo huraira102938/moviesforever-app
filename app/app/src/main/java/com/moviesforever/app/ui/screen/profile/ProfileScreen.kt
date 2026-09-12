@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -49,6 +50,8 @@ fun ProfileScreen(
     onShareApk: (String) -> Unit = {},
     onReferralClick: () -> Unit,
     onSettings: () -> Unit,
+    onNotifications: () -> Unit = {},
+    notificationCount: Int = 0,
     onUnlockClick: () -> Unit
 ) {
     val isUnlocked = unlockInfo != null
@@ -297,6 +300,10 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            NotificationsRow(onClick = onNotifications, count = notificationCount)
+
+            Spacer(Modifier.height(8.dp))
+
             // Settings Row
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -389,6 +396,10 @@ fun ProfileScreen(
 
             Spacer(Modifier.height(10.dp))
 
+            NotificationsRow(onClick = onNotifications, count = notificationCount)
+
+            Spacer(Modifier.height(8.dp))
+
             // Settings Row
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -419,6 +430,54 @@ fun ProfileScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NotificationsRow(onClick: () -> Unit, count: Int) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, DarkElevated, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Notifications,
+                contentDescription = null,
+                tint = Gold,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("Notifications", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            if (count > 0) {
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    color = Gold,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = if (count > 9) "9+" else count.toString(),
+                        color = Black,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }

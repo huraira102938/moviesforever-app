@@ -35,6 +35,8 @@ import com.moviesforever.app.ui.screen.detail.MovieDetailScreen
 import com.moviesforever.app.ui.screen.downloads.DownloadsScreen
 import com.moviesforever.app.ui.screen.home.HomeScreen
 import com.moviesforever.app.ui.screen.lock.LockScreen
+import com.moviesforever.app.ui.screen.notifications.NotificationsScreen
+import com.moviesforever.app.ui.screen.paused.PausedScreen
 import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
 import com.moviesforever.app.ui.screen.player.PlayerScreen
 import com.moviesforever.app.ui.screen.player.findActivity
@@ -65,6 +67,28 @@ fun MoviesForeverNavHost(
 
     // Selected tab state
     var currentTab by remember { mutableIntStateOf(0) }
+
+    // Global "paused" guard: as soon as the admin flips `users/{id}.paused`
+    // to true (live Firestore listener via AccountRepository), immediately
+    // kick the user to the PausedScreen and wipe the back stack -- no matter
+    // what screen they're on, including mid-playback in PlayerScreen. This
+    // runs at the NavHost level (not per-screen) so it can't be missed by
+    // adding a check to only some destinations. When the admin resumes the
+    // account, this same effect routes back to Main.
+    val account = uiState.account
+    LaunchedEffect(account?.paused) {
+        val isPaused = account?.paused == true
+        val currentRoute = navController.currentBackStackEntry?.destination?.route
+        if (isPaused && currentRoute != Screen.Paused.route) {
+            navController.navigate(Screen.Paused.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        } else if (!isPaused && currentRoute == Screen.Paused.route) {
+            navController.navigate(Screen.Main.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
 
     Scaffold(
         containerColor = Black,
@@ -261,30 +285,54 @@ fun MoviesForeverNavHost(
                         genres = uiState.genres.associate { it.id to it.name },
                         downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = {
-                            val isAllowed = movie.isFree || uiState.isUnlocked
-                            if (isAllowed) {
-                                navController.navigate(Screen.Player.createRoute(movie.id, trailer = false))
+                            // Defense-in-depth against the paused-guard race: the
+                            // NavHost-level LaunchedEffect (see above) redirects to
+                            // PausedScreen as soon as account.paused flips true, but
+                            // if the admin pauses the user in the split-second while
+                            // they're already browsing, a fast tap here could still
+                            // slip through before that redirect lands. Re-check the
+                            // live paused flag right at the point of action so a
+                            // paused user can never actually start a stream.
+                            if (uiState.account?.paused == true) {
+                                navController.navigate(Screen.Paused.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
                             } else {
-                                navController.navigate(Screen.PaymentInstructions.route)
+                                val isAllowed = movie.isFree || uiState.isUnlocked
+                                if (isAllowed) {
+                                    navController.navigate(Screen.Player.createRoute(movie.id, trailer = false))
+                                } else {
+                                    navController.navigate(Screen.PaymentInstructions.route)
+                                }
                             }
                         },
                         onWatchTrailer = {
-                            if (!movie.trailerUrl.isNullOrBlank()) {
+                            if (uiState.account?.paused == true) {
+                                navController.navigate(Screen.Paused.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            } else if (!movie.trailerUrl.isNullOrBlank()) {
                                 navController.navigate(Screen.Player.createRoute(movie.id, trailer = true))
                             }
                         },
                         onDownload = {
-                            viewModel.downloadMovie(movie) { result ->
-                                when (result) {
-                                    DownloadRequestResult.Started -> {
-                                        scope.launch { snackbarHostState.showSnackbar("Download started") }
-                                    }
-                                    DownloadRequestResult.RequiresUnlock -> {
-                                        navController.navigate(Screen.PaymentInstructions.route)
-                                    }
-                                    DownloadRequestResult.RequiresWifi -> {
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
+                            if (uiState.account?.paused == true) {
+                                navController.navigate(Screen.Paused.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            } else {
+                                viewModel.downloadMovie(movie) { result ->
+                                    when (result) {
+                                        DownloadRequestResult.Started -> {
+                                            scope.launch { snackbarHostState.showSnackbar("Download started") }
+                                        }
+                                        DownloadRequestResult.RequiresUnlock -> {
+                                            navController.navigate(Screen.PaymentInstructions.route)
+                                        }
+                                        DownloadRequestResult.RequiresWifi -> {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
+                                            }
                                         }
                                     }
                                 }
@@ -350,6 +398,17 @@ fun MoviesForeverNavHost(
                     earnings = uiState.earnings,
                     appShareLink = uiState.appShareLink,
                     onShareApk = { text -> shareText(context, text) },
+                    onBack = { navController.popBackStackSafe() }
+                )
+            }
+
+            composable(Screen.Paused.route) {
+                PausedScreen(note = uiState.account?.pauseUserNote.orEmpty())
+            }
+
+            composable(Screen.Notifications.route) {
+                NotificationsScreen(
+                    notifications = uiState.myNotifications,
                     onBack = { navController.popBackStackSafe() }
                 )
             }
@@ -438,6 +497,8 @@ private fun MainScaffoldWithTabs(
                     onShareApk = { text -> shareText(context, text) },
                     onReferralClick = { navController.navigate(Screen.Referral.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) },
+                    onNotifications = { navController.navigate(Screen.Notifications.route) },
+                    notificationCount = uiState.myNotifications.size,
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) }
                 )
             }

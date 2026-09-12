@@ -9,6 +9,7 @@ import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.data.model.ContactDetails
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
+import com.moviesforever.app.data.model.AppNotification
 import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.ReferralEarnings
@@ -26,6 +27,7 @@ import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.InstallRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.MoviesRepository
+import com.moviesforever.app.data.repository.NotificationsRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.ReferralEarningsRepository
@@ -60,9 +62,31 @@ data class AppUiState(
     val loading: Boolean = true,
     val account: UserAccount? = null,
     val earnings: ReferralEarnings = ReferralEarnings(),
-    val appShareLink: AppShareLink? = null
+    val appShareLink: AppShareLink? = null,
+    val notifications: List<AppNotification> = emptyList()
 ) {
     val isUnlocked: Boolean get() = unlockInfo != null
+
+    /**
+     * Which of the admin's three target groups ("free" / "paid" / "paused")
+     * this user currently falls into -- mirrors the same grouping the admin
+     * panel's Notifications page uses to count reach (paused takes priority
+     * over paid/free, matching `UserManagement`/`Notifications` on the admin
+     * side, which both exclude paused users from the paid/free counts).
+     */
+    val myNotificationTarget: String
+        get() = when {
+            account?.paused == true -> "paused"
+            isUnlocked -> "paid"
+            else -> "free"
+        }
+
+    /** Notifications relevant to this user, newest first. Purely a read-only
+     * in-app feed -- there is no push/system notification sent for these. */
+    val myNotifications: List<AppNotification>
+        get() = notifications
+            .filter { myNotificationTarget in it.targets }
+            .sortedByDescending { it.createdAt }
 
     val downloadedMovies: List<Movie> get() = downloadStatuses.entries
         .filter { it.value is MovieDownloadStatus.Completed }
@@ -115,6 +139,7 @@ class AppViewModel @Inject constructor(
     referralEarningsRepository: ReferralEarningsRepository,
     appShareRepository: AppShareRepository,
     trendingRepository: TrendingRepository,
+    notificationsRepository: NotificationsRepository,
     private val installRepository: InstallRepository,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
@@ -269,6 +294,13 @@ class AppViewModel @Inject constructor(
             initialValue = null
         )
 
+    private val notificationsState: StateFlow<List<AppNotification>> = notificationsRepository.observeNotifications()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     private val baseUiState: StateFlow<AppUiState> = combine(
         unlockCheckState,
         pricingState,
@@ -304,12 +336,14 @@ class AppViewModel @Inject constructor(
         baseUiState,
         accountState,
         earningsState,
-        appShareLinkState
-    ) { base, account, earnings, appShareLink ->
+        appShareLinkState,
+        notificationsState
+    ) { base, account, earnings, appShareLink, notifications ->
         base.copy(
             account = account,
             earnings = earnings,
-            appShareLink = appShareLink
+            appShareLink = appShareLink,
+            notifications = notifications
         )
     }.stateIn(
         scope = viewModelScope,

@@ -118,7 +118,7 @@ fun PaymentInstructionsScreen(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "LIMITED OFFER • First 500 Users Only",
+                            text = "LIMITED OFFER",
                             color = Error,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -252,15 +252,6 @@ fun PaymentInstructionsScreen(
                     cursorColor = Gold
                 )
             )
-            if (pricing.referralPayout > 0) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "If someone referred you, enter their username so they receive PKR ${pricing.referralPayout.toInt()} once verified.",
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
-
             Spacer(Modifier.height(24.dp))
 
             // Action Call to Action Button
@@ -285,7 +276,7 @@ fun PaymentInstructionsScreen(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = "Verification typically takes less than 5 minutes",
+                    text = "Verification typically takes less than 20 minutes",
                     color = TextMuted,
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center

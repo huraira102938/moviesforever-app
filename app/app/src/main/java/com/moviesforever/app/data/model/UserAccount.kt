@@ -26,7 +26,15 @@ data class UserAccount(
     val accountTitle: String = "",
     val jazzCashNumber: String = "",
     val jazzCashTitle: String = "",
-    val referralCount: Int = 0
+    val referralCount: Int = 0,
+    /**
+     * Set by the admin panel's User Management "Pause" action (`users/{id}.paused`).
+     * While true, the app must block all streaming/playback for this user and show
+     * only the [pauseUserNote] message -- see PausedScreen.
+     */
+    val paused: Boolean = false,
+    /** User-facing note the admin wrote when pausing (`users/{id}.pauseUserNote`). */
+    val pauseUserNote: String = ""
 ) {
     /** Display-friendly payout number, preferring the generic field. */
     val effectivePaymentNumber: String

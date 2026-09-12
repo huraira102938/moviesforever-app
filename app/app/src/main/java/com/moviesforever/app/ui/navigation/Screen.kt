@@ -23,4 +23,6 @@ sealed class Screen(val route: String) {
     data object Referral : Screen("referral")
     data object Celebration : Screen("celebration")
     data object Settings : Screen("settings")
+    data object Paused : Screen("paused")
+    data object Notifications : Screen("notifications")
 }

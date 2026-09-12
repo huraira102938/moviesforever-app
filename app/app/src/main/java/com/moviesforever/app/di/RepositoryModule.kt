@@ -18,6 +18,8 @@ import com.moviesforever.app.data.repository.InstallRepository
 import com.moviesforever.app.data.repository.InstallRepositoryImpl
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.MoviesRepositoryImpl
+import com.moviesforever.app.data.repository.NotificationsRepository
+import com.moviesforever.app.data.repository.NotificationsRepositoryImpl
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepositoryImpl
 import com.moviesforever.app.data.repository.PricingRepository
@@ -99,4 +101,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTrendingRepository(impl: TrendingRepositoryImpl): TrendingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationsRepository(impl: NotificationsRepositoryImpl): NotificationsRepository
 }
