@@ -34,6 +34,7 @@ import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.components.SectionLabels
 import com.moviesforever.app.ui.theme.*
@@ -113,6 +114,10 @@ fun HomeScreen(
                     price = pricing.standardPrice,
                     onClick = onUnlockClick
                 )
+                Spacer(Modifier.height(12.dp))
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    AdminNoteBanner(note = pricing.note)
+                }
                 Spacer(Modifier.height(20.dp))
             }
         }
@@ -314,30 +319,19 @@ private fun ModernUnlockBanner(price: Double, onClick: () -> Unit) {
             .padding(16.dp)
     ) {
         Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.LocalFireDepartment,
-                        contentDescription = null,
-                        tint = Error,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "LIMITED TIME OFFER",
-                        color = Error,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.LocalFireDepartment,
+                    contentDescription = null,
+                    tint = Error,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
                 Text(
-                    text = "First 500 users only",
-                    color = TextMuted,
-                    fontSize = 11.sp
+                    text = "LIMITED TIME OFFER",
+                    color = Error,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 

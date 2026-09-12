@@ -24,7 +24,8 @@ class PricingRepositoryImpl @Inject constructor(
                     PricingSettings(
                         standardPrice = (data["standardPrice"] as? Number)?.toDouble() ?: 0.0,
                         referralPrice = (data["referralPrice"] as? Number)?.toDouble() ?: 0.0,
-                        referralPayout = (data["referralPayout"] as? Number)?.toDouble() ?: 0.0
+                        referralPayout = (data["referralPayout"] as? Number)?.toDouble() ?: 0.0,
+                        note = (data["note"] as? String)?.trim() ?: ""
                     )
                 )
             }

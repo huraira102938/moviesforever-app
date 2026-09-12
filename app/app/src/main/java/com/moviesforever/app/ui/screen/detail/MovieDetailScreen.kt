@@ -34,6 +34,7 @@ import coil.size.Size
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.repository.MovieDownloadStatus
+import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.components.GoldOutlinedButton
 import com.moviesforever.app.ui.theme.*
@@ -302,30 +303,19 @@ fun MovieDetailScreen(
                         .border(1.dp, Gold.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Filled.LocalFireDepartment,
-                                    contentDescription = null,
-                                    tint = Error,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "LIMITED TIME OFFER",
-                                    color = Error,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.LocalFireDepartment,
+                                contentDescription = null,
+                                tint = Error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
                             Text(
-                                text = "First 500 users only",
-                                color = TextMuted,
-                                fontSize = 11.sp
+                                text = "LIMITED TIME OFFER",
+                                color = Error,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
 
@@ -359,6 +349,9 @@ fun MovieDetailScreen(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(12.dp))
+                AdminNoteBanner(note = pricing.note)
             }
 
             Spacer(Modifier.height(20.dp))

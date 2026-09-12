@@ -14,6 +14,8 @@ import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRepositoryImpl
 import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.GenresRepositoryImpl
+import com.moviesforever.app.data.repository.InstallRepository
+import com.moviesforever.app.data.repository.InstallRepositoryImpl
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.MoviesRepositoryImpl
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
@@ -87,4 +89,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindContactDetailsRepository(impl: ContactDetailsRepositoryImpl): ContactDetailsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindInstallRepository(impl: InstallRepositoryImpl): InstallRepository
 }

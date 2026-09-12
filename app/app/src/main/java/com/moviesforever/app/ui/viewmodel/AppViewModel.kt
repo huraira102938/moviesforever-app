@@ -22,6 +22,7 @@ import com.moviesforever.app.data.repository.ContactDetailsRepository
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.data.repository.GenresRepository
+import com.moviesforever.app.data.repository.InstallRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
@@ -75,6 +76,18 @@ sealed class UnlockCheckState {
     data class Unlocked(val info: UnlockInfo) : UnlockCheckState()
 }
 
+/**
+ * Fast, local-only (DataStore) signal for whether this device has completed
+ * the one-time "Start Browsing" welcome step. Mirrors [UnlockCheckState]'s
+ * shape/purpose: Splash waits for this to leave [Loading] before routing, so
+ * routing never depends on a network call.
+ */
+sealed class InstallCheckState {
+    data object Loading : InstallCheckState()
+    data object NotInstalled : InstallCheckState()
+    data object Installed : InstallCheckState()
+}
+
 @HiltViewModel
 class AppViewModel @Inject constructor(
     moviesRepository: MoviesRepository,
@@ -88,6 +101,7 @@ class AppViewModel @Inject constructor(
     accountRepository: AccountRepository,
     referralEarningsRepository: ReferralEarningsRepository,
     appShareRepository: AppShareRepository,
+    private val installRepository: InstallRepository,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
@@ -99,6 +113,14 @@ class AppViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = UnlockCheckState.Loading
+        )
+
+    val installCheckState: StateFlow<InstallCheckState> = installRepository.observeIsInstalled()
+        .map { installed -> if (installed) InstallCheckState.Installed else InstallCheckState.NotInstalled }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = InstallCheckState.Loading
         )
 
     private data class ContentData(
@@ -304,6 +326,13 @@ class AppViewModel @Inject constructor(
     fun setWifiOnlyDownloads(enabled: Boolean) {
         viewModelScope.launch {
             downloadRepository.setWifiOnly(enabled)
+        }
+    }
+
+    /** Called when the user taps "Start Browsing" on the one-time welcome screen. */
+    fun markInstalled() {
+        viewModelScope.launch {
+            installRepository.markInstalled()
         }
     }
 }

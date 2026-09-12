@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.moviesforever.app.R
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
 
@@ -112,6 +113,12 @@ fun LockScreen(
                     onBrowseFree = onBrowseFree
                 )
             }
+
+            Spacer(Modifier.height(20.dp))
+
+            // Admin-controlled note (same settings/pricing.note shown on the
+            // pricing card and home screen) -- content fully owned by the admin.
+            AdminNoteBanner(note = pricing.note)
 
             Spacer(Modifier.height(24.dp))
 

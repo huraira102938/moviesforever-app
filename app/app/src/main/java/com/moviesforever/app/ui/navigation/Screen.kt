@@ -2,6 +2,7 @@ package com.moviesforever.app.ui.navigation
 
 sealed class Screen(val route: String) {
     data object Splash : Screen("splash")
+    data object Welcome : Screen("welcome")
     data object Lock : Screen("lock")
     data object PaymentInstructions : Screen("payment_instructions")
     data object Main : Screen("nb_main")

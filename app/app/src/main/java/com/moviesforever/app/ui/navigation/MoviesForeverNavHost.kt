@@ -43,8 +43,10 @@ import com.moviesforever.app.ui.screen.referral.ReferralScreen
 import com.moviesforever.app.ui.screen.search.SearchScreen
 import com.moviesforever.app.ui.screen.settings.SettingsScreen
 import com.moviesforever.app.ui.screen.splash.SplashScreen
+import com.moviesforever.app.ui.screen.welcome.WelcomeScreen
 import com.moviesforever.app.ui.theme.Black
 import com.moviesforever.app.ui.viewmodel.AppViewModel
+import com.moviesforever.app.ui.viewmodel.InstallCheckState
 import com.moviesforever.app.ui.viewmodel.LockViewModel
 import com.moviesforever.app.ui.viewmodel.UnlockCheckState
 import kotlinx.coroutines.delay
@@ -76,22 +78,46 @@ fun MoviesForeverNavHost(
             composable(Screen.Splash.route) {
                 SplashScreen(
                     unlockCheckState = viewModel.unlockCheckState,
+                    installCheckState = viewModel.installCheckState,
                     onFinished = {
-                        // IMPORTANT: this reads the fast, local-only unlock check
-                        // (DataStore), not uiState.isUnlocked, which also waits on
+                        // IMPORTANT: these read the fast, local-only unlock/install
+                        // checks (DataStore), not uiState, which also waits on
                         // network calls (movies/categories/pricing via Firestore).
                         // Gating this decision on network content previously caused
                         // premium users to intermittently see the Lock screen
                         // whenever those network calls were slow to resolve.
-                        val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
-                        if (isUnlocked) {
-                            navController.navigate(Screen.Main.route) {
+                        val isInstalled = viewModel.installCheckState.value is InstallCheckState.Installed
+                        if (!isInstalled) {
+                            // First launch on this device: show the one-time
+                            // welcome step before Lock/Main.
+                            navController.navigate(Screen.Welcome.route) {
                                 popUpTo(Screen.Splash.route) { inclusive = true }
                             }
                         } else {
-                            navController.navigate(Screen.Lock.route) {
-                                popUpTo(Screen.Splash.route) { inclusive = true }
+                            val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
+                            if (isUnlocked) {
+                                navController.navigate(Screen.Main.route) {
+                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                                }
+                            } else {
+                                navController.navigate(Screen.Lock.route) {
+                                    popUpTo(Screen.Splash.route) { inclusive = true }
+                                }
                             }
+                        }
+                    }
+                )
+            }
+
+            composable(Screen.Welcome.route) {
+                WelcomeScreen(
+                    note = uiState.pricing.note,
+                    onStartBrowsing = {
+                        viewModel.markInstalled()
+                        val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
+                        val destination = if (isUnlocked) Screen.Main.route else Screen.Lock.route
+                        navController.navigate(destination) {
+                            popUpTo(Screen.Welcome.route) { inclusive = true }
                         }
                     }
                 )
