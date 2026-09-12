@@ -392,6 +392,7 @@ private fun MainScaffoldWithTabs(
                 0 -> HomeScreen(
                     banners = uiState.banners,
                     movies = uiState.movies,
+                    trendingMovies = uiState.trendingMovies,
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->

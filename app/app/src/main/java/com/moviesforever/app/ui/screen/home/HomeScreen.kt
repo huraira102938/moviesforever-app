@@ -34,7 +34,6 @@ import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
-import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.components.SectionLabels
 import com.moviesforever.app.ui.theme.*
@@ -45,6 +44,7 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     banners: List<Banner>,
     movies: List<Movie>,
+    trendingMovies: List<Movie>,
     pricing: PricingSettings,
     isUnlocked: Boolean,
     onBannerClick: (Banner) -> Unit,
@@ -107,17 +107,15 @@ fun HomeScreen(
             }
         }
 
-        // High-Converting Unlock Banner
+        // Single admin-controlled offer banner (note text comes entirely from
+        // the admin panel; only the "Limited Time Offer" label and "Get Pass"
+        // button are app-owned chrome around it).
         if (!isUnlocked) {
             item {
-                ModernUnlockBanner(
-                    price = pricing.standardPrice,
+                ModernOfferBanner(
+                    note = pricing.note,
                     onClick = onUnlockClick
                 )
-                Spacer(Modifier.height(12.dp))
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AdminNoteBanner(note = pricing.note)
-                }
                 Spacer(Modifier.height(20.dp))
             }
         }
@@ -127,11 +125,22 @@ fun HomeScreen(
             val sectionMovies = movies.filter { it.sections.contains(section) && !it.paused }
             if (sectionMovies.isNotEmpty()) {
                 item {
-                    ModernSectionRow(
-                        title = SectionLabels.label(section),
-                        movies = sectionMovies,
-                        onMovieClick = onMovieClick
-                    )
+                    if (section == SectionLabels.ALL_TIME_HIT) {
+                        // All-time Hit is ordered newest-year-first, oldest
+                        // last. The year itself is never shown to the user --
+                        // it only drives the internal ordering.
+                        ModernSectionRow(
+                            title = SectionLabels.label(section),
+                            movies = sectionMovies.sortedByDescending { it.year ?: Int.MIN_VALUE },
+                            onMovieClick = onMovieClick
+                        )
+                    } else {
+                        ModernSectionRow(
+                            title = SectionLabels.label(section),
+                            movies = sectionMovies,
+                            onMovieClick = onMovieClick
+                        )
+                    }
                 }
             }
         }
@@ -143,6 +152,18 @@ fun HomeScreen(
                 ModernSectionRow(
                     title = "Free to Watch",
                     movies = freeMovies,
+                    onMovieClick = onMovieClick
+                )
+            }
+        }
+
+        // Trending Now -- curated by the admin panel's dedicated "Trending"
+        // page (its own movieId + order list, not a section tag). Shown at
+        // the very bottom of the home feed as a static grid, not a row.
+        if (trendingMovies.isNotEmpty()) {
+            item {
+                TrendingSection(
+                    movies = trendingMovies,
                     onMovieClick = onMovieClick
                 )
             }
@@ -300,7 +321,9 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
 }
 
 @Composable
-private fun ModernUnlockBanner(price: Double, onClick: () -> Unit) {
+private fun ModernOfferBanner(note: String, onClick: () -> Unit) {
+    val trimmedNote = note.trim()
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -318,69 +341,147 @@ private fun ModernUnlockBanner(price: Double, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.LocalFireDepartment,
-                    contentDescription = null,
-                    tint = Error,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(4.dp))
+
+        // Fully admin-controlled copy (settings/pricing.note). The app
+            // never hardcodes offer text -- only this label and the button
+            // around it are app-owned chrome.
+            if (trimmedNote.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "LIMITED TIME OFFER",
-                    color = Error,
-                    fontSize = 11.sp,
+                    text = trimmedNote,
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+        }
+    }
+
+
+@Composable
+private fun TrendingSection(
+    movies: List<Movie>,
+    onMovieClick: (Movie) -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 4.dp, height = 16.dp)
+                        .background(Gold, RoundedCornerShape(2.dp))
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "🔥 Trending Now",
+                    color = TextPrimary,
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "${movies.size} Movies",
+                color = TextMuted,
+                fontSize = 12.sp
+            )
+        }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Unlock Lifetime Pass",
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Pay once PKR ${price.toInt()} • Watch forever",
-                        color = GoldLight,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+        Spacer(Modifier.height(12.dp))
 
-                Surface(
-                    color = Gold,
-                    shape = RoundedCornerShape(12.dp)
+        // Plain grid, stacked in a Column -- intentionally NOT a
+        // LazyRow/horizontal scroller.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            movies.chunked(3).forEach { rowMovies ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Get Pass",
-                            color = Black,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                    rowMovies.forEach { movie ->
+                        TrendingGridTile(
+                            movie = movie,
+                            onClick = { onMovieClick(movie) },
+                            modifier = Modifier.weight(1f)
                         )
-                        Icon(
-                            imageVector = Icons.Filled.ChevronRight,
-                            contentDescription = null,
-                            tint = Black,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    }
+                    // Keep tile width consistent when the last row has
+                    // fewer than 3 items.
+                    repeat(3 - rowMovies.size) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrendingGridTile(
+    movie: Movie,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.clickable(onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(DarkSurface)
+        ) {
+            AsyncImage(
+                model = movie.thumbnailUrl,
+                contentDescription = movie.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (movie.isFree) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .background(Gold.copy(alpha = 0.9f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "FREE",
+                        color = Black,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            movie.badge?.let { badge ->
+                Text(
+                    text = badge,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = movie.title,
+            color = TextMuted,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

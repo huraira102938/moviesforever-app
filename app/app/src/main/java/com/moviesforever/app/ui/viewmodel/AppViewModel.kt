@@ -12,6 +12,7 @@ import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.ReferralEarnings
+import com.moviesforever.app.data.model.TrendingItem
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.repository.AccountRepository
@@ -28,6 +29,7 @@ import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.ReferralEarningsRepository
+import com.moviesforever.app.data.repository.TrendingRepository
 import com.moviesforever.app.data.repository.UnlockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,6 +53,7 @@ data class AppUiState(
     val categories: List<Category> = emptyList(),
     val genres: List<Genre> = emptyList(),
     val banners: List<Banner> = emptyList(),
+    val trendingItems: List<TrendingItem> = emptyList(),
     val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
     val downloadedMovieInfo: Map<String, Movie> = emptyMap(),
     val wifiOnlyDownloads: Boolean = true,
@@ -68,6 +71,16 @@ data class AppUiState(
     val downloadingMovies: List<Movie> get() = downloadStatuses.entries
         .filter { it.value is MovieDownloadStatus.Downloading }
         .mapNotNull { downloadedMovieInfo[it.key] }
+
+    /**
+     * Resolves the admin's curated `trending` collection (movieId + order)
+     * against the live movies list, in the exact order set from the admin
+     * panel's "Trending" page. Paused or since-deleted movies drop out.
+     */
+    val trendingMovies: List<Movie> get() = trendingItems
+        .sortedBy { it.order }
+        .mapNotNull { item -> movies.find { it.id == item.movieId } }
+        .filter { !it.paused }
 }
 
 sealed class UnlockCheckState {
@@ -101,6 +114,7 @@ class AppViewModel @Inject constructor(
     accountRepository: AccountRepository,
     referralEarningsRepository: ReferralEarningsRepository,
     appShareRepository: AppShareRepository,
+    trendingRepository: TrendingRepository,
     private val installRepository: InstallRepository,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
@@ -127,20 +141,22 @@ class AppViewModel @Inject constructor(
         val movies: List<Movie>,
         val categories: List<Category>,
         val genres: List<Genre>,
-        val banners: List<Banner>
+        val banners: List<Banner>,
+        val trendingItems: List<TrendingItem>
     )
 
     private val contentDataState: StateFlow<ContentData> = combine(
         moviesRepository.observeMovies(),
         categoriesRepository.observeCategories(),
         genresRepository.observeGenres(),
-        bannersRepository.observeBanners()
-    ) { movies, categories, genres, banners ->
-        ContentData(movies, categories, genres, banners)
+        bannersRepository.observeBanners(),
+        trendingRepository.observeTrendingItems()
+    ) { movies, categories, genres, banners, trendingItems ->
+        ContentData(movies, categories, genres, banners, trendingItems)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = ContentData(emptyList(), emptyList(), emptyList(), emptyList())
+        initialValue = ContentData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
     )
 
     private val pricingState: StateFlow<PricingSettings> = pricingRepository.observePricing()
@@ -272,6 +288,7 @@ class AppViewModel @Inject constructor(
             categories = content.categories,
             genres = content.genres,
             banners = content.banners,
+            trendingItems = content.trendingItems,
             downloadStatuses = downloadStatuses,
             downloadedMovieInfo = downloadedMovieInfo,
             wifiOnlyDownloads = wifiOnly,

@@ -29,6 +29,7 @@ import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.ui.components.MoviePoster
+import com.moviesforever.app.ui.components.SectionLabels
 import com.moviesforever.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +51,32 @@ fun SearchScreen(
         val matchGenre = selectedGenres.isEmpty() || m.genres.any { selectedGenres.contains(it) }
         val matchFree = !freeOnly || m.isFree
         matchQuery && matchCat && matchGenre && matchFree && !m.paused
+    }
+
+    // Search results are ordered by curated priority, not relevance/alpha:
+    // Hit of This Year -> All-time Hit (newest year first) -> Hot -> everything else.
+    // Each movie appears exactly once, in the highest-priority bucket it belongs to.
+    val orderedResults = remember(filtered) {
+        val hitOfYear = filtered.filter { it.sections.contains(SectionLabels.HIT_OF_THIS_YEAR) }
+        val hitOfYearIds = hitOfYear.map { it.id }.toSet()
+
+        val allTimeHit = filtered
+            .filter { it.sections.contains(SectionLabels.ALL_TIME_HIT) && it.id !in hitOfYearIds }
+            .sortedByDescending { it.year ?: Int.MIN_VALUE }
+        val allTimeHitIds = allTimeHit.map { it.id }.toSet()
+
+        val hot = filtered.filter {
+            it.sections.contains(SectionLabels.HOT) &&
+                it.id !in hitOfYearIds &&
+                it.id !in allTimeHitIds
+        }
+        val hotIds = hot.map { it.id }.toSet()
+
+        val remaining = filtered.filterNot {
+            it.id in hitOfYearIds || it.id in allTimeHitIds || it.id in hotIds
+        }
+
+        hitOfYear + allTimeHit + hot + remaining
     }
 
     Column(
@@ -205,7 +232,7 @@ fun SearchScreen(
                 contentPadding = PaddingValues(bottom = 16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(filtered) { movie ->
+                items(orderedResults) { movie ->
                     MoviePoster(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }

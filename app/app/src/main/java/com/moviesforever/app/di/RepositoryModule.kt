@@ -26,6 +26,8 @@ import com.moviesforever.app.data.repository.RedemptionRepository
 import com.moviesforever.app.data.repository.RedemptionRepositoryImpl
 import com.moviesforever.app.data.repository.ReferralEarningsRepository
 import com.moviesforever.app.data.repository.ReferralEarningsRepositoryImpl
+import com.moviesforever.app.data.repository.TrendingRepository
+import com.moviesforever.app.data.repository.TrendingRepositoryImpl
 import com.moviesforever.app.data.repository.UnlockRepository
 import com.moviesforever.app.data.repository.UnlockRepositoryImpl
 import dagger.Binds
@@ -93,4 +95,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindInstallRepository(impl: InstallRepositoryImpl): InstallRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTrendingRepository(impl: TrendingRepositoryImpl): TrendingRepository
 }
