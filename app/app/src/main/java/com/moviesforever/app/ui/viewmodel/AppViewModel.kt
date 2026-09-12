@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.moviesforever.app.data.model.AppShareLink
 import com.moviesforever.app.data.model.Banner
 import com.moviesforever.app.data.model.Category
+import com.moviesforever.app.data.model.ContactDetails
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
+import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.ReferralEarnings
 import com.moviesforever.app.data.model.UnlockInfo
@@ -16,11 +18,13 @@ import com.moviesforever.app.data.repository.AccountRepository
 import com.moviesforever.app.data.repository.AppShareRepository
 import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.CategoriesRepository
+import com.moviesforever.app.data.repository.ContactDetailsRepository
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.MoviesRepository
+import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.ReferralEarningsRepository
 import com.moviesforever.app.data.repository.UnlockRepository
@@ -40,6 +44,8 @@ private const val TAG = "MF_Download"
 data class AppUiState(
     val unlockInfo: UnlockInfo? = null,
     val pricing: PricingSettings = PricingSettings(),
+    val paymentDetails: PaymentDetails = PaymentDetails(),
+    val contactDetails: ContactDetails = ContactDetails(),
     val movies: List<Movie> = emptyList(),
     val categories: List<Category> = emptyList(),
     val genres: List<Genre> = emptyList(),
@@ -76,6 +82,8 @@ class AppViewModel @Inject constructor(
     genresRepository: GenresRepository,
     bannersRepository: BannersRepository,
     pricingRepository: PricingRepository,
+    paymentDetailsRepository: PaymentDetailsRepository,
+    contactDetailsRepository: ContactDetailsRepository,
     unlockRepository: UnlockRepository,
     accountRepository: AccountRepository,
     referralEarningsRepository: ReferralEarningsRepository,
@@ -120,6 +128,31 @@ class AppViewModel @Inject constructor(
             initialValue = PricingSettings()
         )
 
+    private val paymentDetailsState: StateFlow<PaymentDetails> = paymentDetailsRepository.observePaymentDetails()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = PaymentDetails()
+        )
+
+    private val contactDetailsState: StateFlow<ContactDetails> = contactDetailsRepository.observeContactDetails()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ContactDetails()
+        )
+
+    // Paired so the 5-flow combine() below (unlockCheck/pricing/content/
+    // downloads/wifi) has room for both without exceeding its arity.
+    private val paymentAndContactState: StateFlow<Pair<PaymentDetails, ContactDetails>> =
+        combine(paymentDetailsState, contactDetailsState) { paymentDetails, contactDetails ->
+            paymentDetails to contactDetails
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = PaymentDetails() to ContactDetails()
+        )
+
     private val downloadStatusesState: StateFlow<Map<String, MovieDownloadStatus>> =
         downloadRepository.observeDownloadStatuses().stateIn(
             scope = viewModelScope,
@@ -157,6 +190,18 @@ class AppViewModel @Inject constructor(
             initialValue = true
         )
 
+    // Paired so the 5-flow combine() below (unlockCheck/pricing/content/
+    // downloads/misc) has room for wifiOnly alongside payment+contact
+    // without exceeding combine()'s 5-argument overload.
+    private val miscState: StateFlow<Pair<Boolean, Pair<PaymentDetails, ContactDetails>>> =
+        combine(wifiOnlyState, paymentAndContactState) { wifiOnly, paymentAndContact ->
+            wifiOnly to paymentAndContact
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true to (PaymentDetails() to ContactDetails())
+        )
+
     private val accountState: StateFlow<UserAccount?> = unlockCheckState
         .flatMapLatest { check ->
             val info = (check as? UnlockCheckState.Unlocked)?.info
@@ -191,12 +236,16 @@ class AppViewModel @Inject constructor(
         pricingState,
         contentDataState,
         downloadsCombinedState,
-        wifiOnlyState
-    ) { unlockCheck, pricing, content, downloadsCombined, wifiOnly ->
+        miscState
+    ) { unlockCheck, pricing, content, downloadsCombined, misc ->
         val (downloadStatuses, downloadedMovieInfo) = downloadsCombined
+        val (wifiOnly, paymentAndContact) = misc
+        val (paymentDetails, contactDetails) = paymentAndContact
         AppUiState(
             unlockInfo = (unlockCheck as? UnlockCheckState.Unlocked)?.info,
             pricing = pricing,
+            paymentDetails = paymentDetails,
+            contactDetails = contactDetails,
             movies = content.movies,
             categories = content.categories,
             genres = content.genres,

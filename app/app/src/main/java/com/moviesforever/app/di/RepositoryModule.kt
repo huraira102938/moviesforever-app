@@ -8,12 +8,16 @@ import com.moviesforever.app.data.repository.BannersRepository
 import com.moviesforever.app.data.repository.BannersRepositoryImpl
 import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.CategoriesRepositoryImpl
+import com.moviesforever.app.data.repository.ContactDetailsRepository
+import com.moviesforever.app.data.repository.ContactDetailsRepositoryImpl
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRepositoryImpl
 import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.GenresRepositoryImpl
 import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.MoviesRepositoryImpl
+import com.moviesforever.app.data.repository.PaymentDetailsRepository
+import com.moviesforever.app.data.repository.PaymentDetailsRepositoryImpl
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.PricingRepositoryImpl
 import com.moviesforever.app.data.repository.RedemptionRepository
@@ -75,4 +79,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAppShareRepository(impl: AppShareRepositoryImpl): AppShareRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPaymentDetailsRepository(impl: PaymentDetailsRepositoryImpl): PaymentDetailsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindContactDetailsRepository(impl: ContactDetailsRepositoryImpl): ContactDetailsRepository
 }

@@ -1,19 +1,26 @@
 package com.moviesforever.app.ui.screen.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moviesforever.app.data.model.ContactDetails
 import com.moviesforever.app.ui.theme.*
 import kotlinx.coroutines.delay
 
@@ -24,12 +31,14 @@ fun SettingsScreen(
     isUnlocked: Boolean,
     username: String?,
     wifiOnlyDownloads: Boolean,
+    contactDetails: ContactDetails = ContactDetails(),
     onWifiOnlyDownloadsChange: (Boolean) -> Unit,
     onResetUnlock: () -> Unit,
     onBack: () -> Unit
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -134,6 +143,53 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(12.dp))
+
+        // WhatsApp group/channel -- shown to everyone, free trial or paid.
+        if (contactDetails.groupLink.isNotBlank()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(contactDetails.groupLink))
+                                )
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Couldn't open the link", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            contactDetails.groupTitle.ifBlank { "Join our WhatsApp group / channel" },
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            contactDetails.groupLink,
+                            color = Gold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = null,
+                        tint = Gold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
 
         Card(
             colors = CardDefaults.cardColors(containerColor = DarkSurface),

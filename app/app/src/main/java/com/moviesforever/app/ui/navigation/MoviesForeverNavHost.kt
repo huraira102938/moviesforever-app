@@ -144,15 +144,25 @@ fun MoviesForeverNavHost(
             composable(Screen.PaymentInstructions.route) {
                 PaymentInstructionsScreen(
                     pricing = uiState.pricing,
+                    paymentDetails = uiState.paymentDetails,
+                    contactDetails = uiState.contactDetails,
                     onSendScreenshotWhatsApp = { referralUsername ->
-                        val phone = "+9203264304455"
-                        val message = "Hi! I have made the payment for MoviesForever Lifetime Access." +
-                                if (referralUsername.isNotBlank()) " Referral Username: $referralUsername" else ""
+                        val supportNumber = uiState.contactDetails.whatsappNumber
+                        if (supportNumber.isBlank()) {
+                            Toast.makeText(
+                                context,
+                                "Support WhatsApp number isn't set up yet. Please try again later.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            val message = "Hi! I have made the payment for MoviesForever Lifetime Access." +
+                                    if (referralUsername.isNotBlank()) " Referral Username: $referralUsername" else ""
 
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            data = Uri.parse("https://api.whatsapp.com/send?phone=$phone&text=${Uri.encode(message)}")
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                data = Uri.parse("https://api.whatsapp.com/send?phone=$supportNumber&text=${Uri.encode(message)}")
+                            }
+                            context.startActivity(intent)
                         }
-                        context.startActivity(intent)
                     },
                     onBack = { navController.popBackStackSafe() }
                 )
@@ -323,6 +333,7 @@ fun MoviesForeverNavHost(
                     isUnlocked = uiState.isUnlocked,
                     username = uiState.unlockInfo?.username,
                     wifiOnlyDownloads = uiState.wifiOnlyDownloads,
+                    contactDetails = uiState.contactDetails,
                     onWifiOnlyDownloadsChange = { viewModel.setWifiOnlyDownloads(it) },
                     onResetUnlock = { viewModel.resetUnlock() },
                     onBack = { navController.popBackStackSafe() }

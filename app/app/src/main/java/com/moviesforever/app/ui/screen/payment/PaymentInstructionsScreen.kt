@@ -26,6 +26,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moviesforever.app.data.model.ContactDetails
+import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
@@ -33,6 +35,8 @@ import com.moviesforever.app.ui.theme.*
 @Composable
 fun PaymentInstructionsScreen(
     pricing: PricingSettings,
+    paymentDetails: PaymentDetails,
+    contactDetails: ContactDetails,
     onSendScreenshotWhatsApp: (referralUsername: String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -171,7 +175,10 @@ fun PaymentInstructionsScreen(
             StepCard(
                 stepNumber = "2",
                 title = "Share Screenshot",
-                description = "Click 'Send Screenshot on WhatsApp' below and attach your payment receipt to +92 03264304455."
+                description = if (contactDetails.whatsappNumber.isNotBlank())
+                    "Click 'Send Screenshot on WhatsApp' below and attach your payment receipt to +${contactDetails.whatsappNumber}."
+                else
+                    "Click 'Send Screenshot on WhatsApp' below and attach your payment receipt."
             )
 
             Spacer(Modifier.height(10.dp))
@@ -203,19 +210,19 @@ fun PaymentInstructionsScreen(
                 Column(Modifier.padding(16.dp)) {
                     PaymentDetailItem(
                         label = "Bank Name",
-                        value = "Faysal Bank",
+                        value = paymentDetails.bankName.ifBlank { "—" },
                         clipboard = clipboard
                     )
                     Spacer(Modifier.height(10.dp))
                     PaymentDetailItem(
                         label = "Account Title",
-                        value = "ABU HURAIRA",
+                        value = paymentDetails.accountTitle.ifBlank { "—" },
                         clipboard = clipboard
                     )
                     Spacer(Modifier.height(10.dp))
                     PaymentDetailItem(
-                        label = "IBAN Number",
-                        value = "PK92FAYS3291301000005223",
+                        label = "Account Number",
+                        value = paymentDetails.accountNumber.ifBlank { "—" },
                         clipboard = clipboard
                     )
                 }
