@@ -2,9 +2,9 @@ package com.moviesforever.app.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.moviesforever.app.data.model.PricingSettings
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -13,14 +13,16 @@ class PricingRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore
 ) : PricingRepository {
 
-    override fun observePricing(): Flow<PricingSettings> = flow {
-        val defaults = PricingSettings()
-        emit(defaults)
-        try {
-            val doc = firestore.document("settings/pricing").get().await()
-            if (doc.exists()) {
-                val data = doc.data ?: return@flow
-                emit(
+    // Live listener -- see MoviesRepositoryImpl for why.
+    override fun observePricing(): Flow<PricingSettings> = callbackFlow {
+        val registration = firestore.document("settings/pricing")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(PricingSettings())
+                    return@addSnapshotListener
+                }
+                val data = snapshot.data ?: emptyMap<String, Any>()
+                trySend(
                     PricingSettings(
                         standardPrice = (data["standardPrice"] as? Number)?.toDouble() ?: 0.0,
                         referralPrice = (data["referralPrice"] as? Number)?.toDouble() ?: 0.0,
@@ -29,8 +31,6 @@ class PricingRepositoryImpl @Inject constructor(
                     )
                 )
             }
-        } catch (e: Exception) {
-            // keep defaults on error
-        }
+        awaitClose { registration.remove() }
     }
 }

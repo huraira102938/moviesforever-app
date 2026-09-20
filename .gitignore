@@ -22,3 +22,12 @@ admin/
 .DS_Store
 Thumbs.db
 *.log
+
+# Secrets - never commit
+application release keys and passwords/
+
+# Build artifacts
+app/app/release/
+
+# Web portal env
+web/.env

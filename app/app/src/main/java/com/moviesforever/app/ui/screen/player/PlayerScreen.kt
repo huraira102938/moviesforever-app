@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -47,10 +48,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.moviesforever.app.BuildConfig
 import com.moviesforever.app.download.DownloadUtil
 import com.moviesforever.app.ui.theme.Black
 import com.moviesforever.app.ui.theme.DarkElevated
@@ -182,15 +185,33 @@ fun PlayerScreen(
 
     // Initialize ExoPlayer
     val exoPlayer = remember(videoUrl, cacheKey) {
-        Log.d(TAG, "Preparing player for url=$videoUrl cacheKey=$cacheKey")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Preparing player for url=$videoUrl cacheKey=$cacheKey")
+        }
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(DownloadUtil.getCacheDataSourceFactory(context))
         val mediaItem = MediaItem.Builder()
             .setUri(Uri.parse(videoUrl))
             .apply { cacheKey?.let { setCustomCacheKey(it) } }
             .build()
+
+        // Retain the last 30s of played samples in memory so backward seeks
+        // within that window are instant instead of re-triggering a load.
+        // Data is already in our disk cache / already fetched — this just
+        // delays discarding it from ExoPlayer's in-memory sample buffer.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBackBuffer(
+                /* backBufferDurationMs = */ 30_000,
+                /* retainBackBufferFromKeyframe = */ true
+            )
+            .build()
+
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            // Duck/pause automatically for phone calls, other apps' audio, etc.,
+            // and resume when focus is regained, instead of playing over them.
+            .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
             .build()
             .apply {
                 setMediaItem(mediaItem)
@@ -395,6 +416,7 @@ fun PlayerScreen(
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     resizeMode = currentResizeMode
                     controllerShowTimeoutMs = 3000
+                    keepScreenOn = true
                     setOnClickListener {
                         showOverlayControls = !showOverlayControls
                     }
@@ -591,15 +613,17 @@ fun PlayerScreen(
                         textAlign = TextAlign.Center
                     )
                     error.cause?.message?.let { causeMessage ->
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = causeMessage,
-                            color = TextPrimary.copy(alpha = 0.4f),
-                            fontSize = 10.sp,
-                            textAlign = TextAlign.Center,
-                            maxLines = 3,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        if (BuildConfig.DEBUG) {
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = causeMessage,
+                                color = TextPrimary.copy(alpha = 0.4f),
+                                fontSize = 10.sp,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                     Spacer(Modifier.height(20.dp))
                     Row {

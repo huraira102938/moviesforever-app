@@ -180,28 +180,34 @@ class AppViewModel @Inject constructor(
         ContentData(movies, categories, genres, banners, trendingItems)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        // Eagerly (not WhileSubscribed): these are real Firestore listeners
+        // now (see MoviesRepositoryImpl etc.), but Firestore still bills a
+        // fresh full-collection read every time a listener reconnects --
+        // detaching after a few quiet seconds and reattaching on the next
+        // navigation would otherwise silently repeat that cost. Eagerly
+        // keeps this attached once for the whole app session instead.
+        started = SharingStarted.Eagerly,
         initialValue = ContentData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
     )
 
     private val pricingState: StateFlow<PricingSettings> = pricingRepository.observePricing()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = PricingSettings()
         )
 
     private val paymentDetailsState: StateFlow<PaymentDetails> = paymentDetailsRepository.observePaymentDetails()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = PaymentDetails()
         )
 
     private val contactDetailsState: StateFlow<ContactDetails> = contactDetailsRepository.observeContactDetails()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = ContactDetails()
         )
 
@@ -290,14 +296,14 @@ class AppViewModel @Inject constructor(
     private val appShareLinkState: StateFlow<AppShareLink?> = appShareRepository.observeCurrentShareLink()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
 
     private val notificationsState: StateFlow<List<AppNotification>> = notificationsRepository.observeNotifications()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = emptyList()
         )
 

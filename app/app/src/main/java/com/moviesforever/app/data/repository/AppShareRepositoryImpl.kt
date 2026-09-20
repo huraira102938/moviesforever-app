@@ -24,7 +24,7 @@ class AppShareRepositoryImpl @Inject constructor(
                     trySend(null)
                     return@addSnapshotListener
                 }
-                val newest = snapshot.documents
+                val docs = snapshot.documents
                     .mapNotNull { doc ->
                         val data = doc.data ?: return@mapNotNull null
                         AppShareLink(
@@ -35,8 +35,13 @@ class AppShareRepositoryImpl @Inject constructor(
                             createdAt = data["createdAt"] as? String ?: ""
                         )
                     }
-                    .maxByOrNull { it.createdAt }
-                trySend(newest)
+                // Prefer the newest doc that still has a drive link so the
+                // in-app share keeps working even when a newer APK-only entry
+                // (used for the landing page download) is added above it.
+                val withLink = docs.filter { it.apkUrl.isNotBlank() }
+                val newest = docs.maxByOrNull { it.createdAt }
+                val current = newest?.takeIf { it.apkUrl.isNotBlank() } ?: withLink.maxByOrNull { it.createdAt }
+                trySend(current)
             }
         awaitClose { registration.remove() }
     }

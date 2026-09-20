@@ -3,9 +3,9 @@ package com.moviesforever.app.data.repository
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.moviesforever.app.data.model.TrendingItem
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,11 +18,20 @@ class TrendingRepositoryImpl @Inject constructor(
     // { movieId: String, order: Int }.
     private val collection = firestore.collection("trending")
 
-    override fun observeTrendingItems(): Flow<List<TrendingItem>> = flow {
-        val snapshot = collection.orderBy("order", Query.Direction.ASCENDING).get().await()
-        val items = snapshot.documents.mapNotNull { doc ->
-            doc.toObject(TrendingItem::class.java)?.copy(id = doc.id)
-        }
-        emit(items)
+    // Live listener -- see MoviesRepositoryImpl for why.
+    override fun observeTrendingItems(): Flow<List<TrendingItem>> = callbackFlow {
+        val registration = collection
+            .orderBy("order", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val items = snapshot.documents.mapNotNull { doc ->
+                    doc.toObject(TrendingItem::class.java)?.copy(id = doc.id)
+                }
+                trySend(items)
+            }
+        awaitClose { registration.remove() }
     }
 }
