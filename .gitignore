@@ -18,6 +18,9 @@ worker/wrangler-*.log
 # Admin panel is a separate git repo
 admin/
 
+# Landing page is a separate git repo
+landing/
+
 # OS / editor
 .DS_Store
 Thumbs.db

@@ -183,6 +183,12 @@ fun PlayerScreen(
     // Playback error / diagnostics state
     var playbackError by remember { mutableStateOf<PlaybackException?>(null) }
 
+    // --- Diagnostic state, added to catch the "loads forever" bug ---
+    // playerState mirrors ExoPlayer's internal state so a watchdog effect below
+    // can react to it (Compose can't observe ExoPlayer's own state directly).
+    var playerState by remember { mutableStateOf(Player.STATE_IDLE) }
+    var loadStartedAtMs by remember { mutableStateOf(0L) }
+
     // Initialize ExoPlayer
     val exoPlayer = remember(videoUrl, cacheKey) {
         if (BuildConfig.DEBUG) {
@@ -326,6 +332,34 @@ fun PlayerScreen(
                 if (playbackState == Player.STATE_READY) {
                     playbackError = null
                 }
+                val name = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($playbackState)"
+                }
+                Log.d(
+                    TAG,
+                    "onPlaybackStateChanged: $name position=${exoPlayer.currentPosition}ms " +
+                            "bufferedPosition=${exoPlayer.bufferedPosition}ms " +
+                            "bufferedDuration=${exoPlayer.totalBufferedDuration}ms"
+                )
+                playerState = playbackState
+            }
+
+            // Fires whenever ExoPlayer starts/stops actively loading data from the
+            // source - this is the direct signal for "spinner is showing right now".
+            // Logging the elapsed duration here is what will prove whether a video is
+            // truly stuck (load never ends) vs. just slow (load ends, eventually).
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                if (isLoading) {
+                    loadStartedAtMs = System.currentTimeMillis()
+                    Log.d(TAG, "onIsLoadingChanged: LOAD START url=$videoUrl")
+                } else {
+                    val elapsed = if (loadStartedAtMs > 0) System.currentTimeMillis() - loadStartedAtMs else -1
+                    Log.d(TAG, "onIsLoadingChanged: LOAD END elapsedMs=$elapsed")
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -333,6 +367,27 @@ fun PlayerScreen(
             exoPlayer.removeListener(listener)
             exoPlayer.release()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Stall watchdog: while ExoPlayer reports BUFFERING, log bufferedPosition every
+    // 5s. If bufferedPosition is NOT increasing between consecutive log lines, the
+    // load really is stuck (network layer isn't delivering bytes at all - check the
+    // MF_Download-tagged Cloudflare Worker / OkHttp logs). If it IS slowly increasing,
+    // it's just a slow connection, not a hang - the UI is just misleading.
+    LaunchedEffect(playerState) {
+        if (playerState != Player.STATE_BUFFERING) return@LaunchedEffect
+        var lastBuffered = -1L
+        while (true) {
+            delay(5000)
+            val buffered = exoPlayer.bufferedPosition
+            val moving = buffered != lastBuffered
+            Log.w(
+                TAG,
+                "STALL WATCHDOG: still BUFFERING, bufferedPosition=${buffered}ms " +
+                        "(${if (moving) "advancing" else "NOT MOVING -- genuinely stuck"})"
+            )
+            lastBuffered = buffered
         }
     }
 
