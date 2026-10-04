@@ -32,12 +32,10 @@ import com.moviesforever.app.ui.components.MoviesBottomBar
 import com.moviesforever.app.ui.screen.category.CategoryBrowseScreen
 import com.moviesforever.app.ui.screen.celebration.CelebrationScreen
 import com.moviesforever.app.ui.screen.detail.MovieDetailScreen
-import com.moviesforever.app.ui.screen.downloads.DownloadsScreen
 import com.moviesforever.app.ui.screen.home.HomeScreen
 import com.moviesforever.app.data.model.TMDB_ID_PREFIX
 import com.moviesforever.app.data.remote.openExternalLink
 import com.moviesforever.app.ui.viewmodel.TmdbViewModel
-import com.moviesforever.app.ui.screen.lock.LockScreen
 import com.moviesforever.app.ui.screen.notifications.NotificationsScreen
 import com.moviesforever.app.ui.screen.paused.PausedScreen
 import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
@@ -66,16 +64,8 @@ fun MoviesForeverNavHost(
     val scope = rememberCoroutineScope()
     val lockViewModel: LockViewModel = hiltViewModel()
 
-    // Selected tab state
     var currentTab by remember { mutableIntStateOf(0) }
 
-    // Global "paused" guard: as soon as the admin flips `users/{id}.paused`
-    // to true (live Firestore listener via AccountRepository), immediately
-    // kick the user to the PausedScreen and wipe the back stack -- no matter
-    // what screen they're on, including mid-playback in PlayerScreen. This
-    // runs at the NavHost level (not per-screen) so it can't be missed by
-    // adding a check to only some destinations. When the admin resumes the
-    // account, this same effect routes back to Main.
     val account = uiState.account
     LaunchedEffect(account?.paused) {
         val isPaused = account?.paused == true
@@ -105,29 +95,15 @@ fun MoviesForeverNavHost(
                     unlockCheckState = viewModel.unlockCheckState,
                     installCheckState = viewModel.installCheckState,
                     onFinished = {
-                        // IMPORTANT: these read the fast, local-only unlock/install
-                        // checks (DataStore), not uiState, which also waits on
-                        // network calls (movies/categories/pricing via Firestore).
-                        // Gating this decision on network content previously caused
-                        // premium users to intermittently see the Lock screen
-                        // whenever those network calls were slow to resolve.
                         val isInstalled = viewModel.installCheckState.value is InstallCheckState.Installed
                         if (!isInstalled) {
-                            // First launch on this device: show the one-time
-                            // welcome step before Lock/Main.
                             navController.navigate(Screen.Welcome.route) {
                                 popUpTo(Screen.Splash.route) { inclusive = true }
                             }
                         } else {
-                            val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
-                            if (isUnlocked) {
-                                navController.navigate(Screen.Main.route) {
-                                    popUpTo(Screen.Splash.route) { inclusive = true }
-                                }
-                            } else {
-                                navController.navigate(Screen.Lock.route) {
-                                    popUpTo(Screen.Splash.route) { inclusive = true }
-                                }
+                            // Lock screen removed: Go straight to Main
+                            navController.navigate(Screen.Main.route) {
+                                popUpTo(Screen.Splash.route) { inclusive = true }
                             }
                         }
                     }
@@ -139,60 +115,33 @@ fun MoviesForeverNavHost(
                     note = uiState.pricing.note,
                     onStartBrowsing = {
                         viewModel.markInstalled()
-                        val isUnlocked = viewModel.unlockCheckState.value is UnlockCheckState.Unlocked
-                        val destination = if (isUnlocked) Screen.Main.route else Screen.Lock.route
-                        navController.navigate(destination) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.Welcome.route) { inclusive = true }
                         }
                     }
                 )
             }
 
-            composable(Screen.Lock.route) {
+            composable(Screen.PaymentInstructions.route) {
                 val lockState by lockViewModel.uiState.collectAsState()
+
                 LaunchedEffect(lockState.success) {
                     if (lockState.success) {
                         val info = uiState.unlockInfo
+                        navController.popBackStack()
                         if (info != null && !info.celebrationShown) {
-                            navController.navigate(Screen.Main.route) {
-                                popUpTo(Screen.Lock.route) { inclusive = true }
-                            }
                             navController.navigate(Screen.Celebration.route)
-                        } else {
-                            navController.navigate(Screen.Main.route) {
-                                popUpTo(Screen.Lock.route) { inclusive = true }
-                            }
                         }
                     }
                 }
+
                 LaunchedEffect(lockState.error) {
                     lockState.error?.let {
                         scope.launch { snackbarHostState.showSnackbar(it) }
                         lockViewModel.clearError()
                     }
                 }
-                LockScreen(
-                    pricing = uiState.pricing,
-                    onUnlocked = { id, username ->
-                        lockViewModel.redeem(id, username)
-                    },
-                    onBrowseFree = {
-                        navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Lock.route) { inclusive = true }
-                        }
-                    },
-                    onUnlockClick = {
-                        navController.navigate(Screen.PaymentInstructions.route)
-                    },
-                    onRedemptionError = {
-                        scope.launch { snackbarHostState.showSnackbar(it) }
-                    },
-                    redeeming = lockState.redeeming,
-                    onRedeemingChange = { }
-                )
-            }
 
-            composable(Screen.PaymentInstructions.route) {
                 PaymentInstructionsScreen(
                     pricing = uiState.pricing,
                     paymentDetails = uiState.paymentDetails,
@@ -215,15 +164,19 @@ fun MoviesForeverNavHost(
                             context.startActivity(intent)
                         }
                     },
+                    onRedeemCode = { id, username ->
+                        if (id.isBlank() || username.isBlank()) {
+                            scope.launch { snackbarHostState.showSnackbar("Please enter both Code ID and Username.") }
+                        } else {
+                            lockViewModel.redeem(id, username)
+                        }
+                    },
+                    redeeming = lockState.redeeming,
                     onBack = { navController.popBackStackSafe() }
                 )
             }
 
             composable(Screen.Main.route) {
-                // Main is the root of the back stack once past Splash/Lock (that entry
-                // was removed via popUpTo(inclusive = true)). So a single system/back
-                // press here used to exit the app immediately with no confirmation.
-                // This adds the standard "press back again to exit" pattern.
                 val activity = context.findActivity()
                 var backPressedOnce by remember { mutableStateOf(false) }
 
@@ -236,13 +189,6 @@ fun MoviesForeverNavHost(
                     }
                 }
 
-                LaunchedEffect(backPressedOnce) {
-                    if (backPressedOnce) {
-                        delay(2000)
-                        backPressedOnce = false
-                    }
-                }
-
                 MainScaffoldWithTabs(
                     currentTab = currentTab,
                     onTabSelected = { index -> currentTab = index },
@@ -252,6 +198,24 @@ fun MoviesForeverNavHost(
                     snackbarHostState = snackbarHostState,
                     scope = scope,
                     lockViewModel = lockViewModel
+                )
+            }
+
+            composable(
+                route = "category_browse/{categoryName}",
+                arguments = listOf(navArgument("categoryName") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val categoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
+                val tmdbViewModel: TmdbViewModel = hiltViewModel()
+                val allTmdbMovies = tmdbViewModel.shelves.collectAsState().value.values.flatten().distinctBy { it.id }
+
+                CategoryBrowseScreen(
+                    categoryTitle = categoryName,
+                    movies = allTmdbMovies,
+                    onMovieClick = { movie ->
+                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
+                    },
+                    onBack = { navController.popBackStackSafe() }
                 )
             }
 
@@ -275,7 +239,6 @@ fun MoviesForeverNavHost(
                 arguments = listOf(navArgument("movieId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
-                // TEST FEATURE: movies from the TMDB JSON files are looked up here too
                 val tmdbViewModel: TmdbViewModel = hiltViewModel()
                 val movie = uiState.movies.find { it.id == movieId } ?: tmdbViewModel.findMovie(movieId)
                 if (movie == null) {
@@ -287,7 +250,7 @@ fun MoviesForeverNavHost(
                         pricing = uiState.pricing,
                         isUnlocked = uiState.isUnlocked,
                         genres = uiState.genres.associate { it.id to it.name },
-                        downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
+                        downloadStatus = com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = onWatchNow@{
                             if (uiState.account?.paused == true) {
                                 navController.navigate(Screen.Paused.route) {
@@ -316,27 +279,7 @@ fun MoviesForeverNavHost(
                             }
                         },
                         onDownload = {
-                            if (uiState.account?.paused == true) {
-                                navController.navigate(Screen.Paused.route) {
-                                    popUpTo(0) { inclusive = true }
-                                }
-                            } else {
-                                viewModel.downloadMovie(movie) { result ->
-                                    when (result) {
-                                        DownloadRequestResult.Started -> {
-                                            scope.launch { snackbarHostState.showSnackbar("Download started") }
-                                        }
-                                        DownloadRequestResult.RequiresUnlock -> {
-                                            navController.navigate(Screen.PaymentInstructions.route)
-                                        }
-                                        DownloadRequestResult.RequiresWifi -> {
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            scope.launch { snackbarHostState.showSnackbar("Offline downloads have been removed.") }
                         },
                         onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
                         onBack = { navController.popBackStackSafe() }
@@ -373,35 +316,15 @@ fun MoviesForeverNavHost(
                     }
 
                     if (!url.isNullOrBlank()) {
-                        // Launch the native PlayerActivity
                         val intent = Intent(context, com.moviesforever.app.ui.screen.player.PlayerActivity::class.java).apply {
                             putExtra("EXTRA_VIDEO_URL", url)
                         }
                         context.startActivity(intent)
-
-                        // Immediately pop this dummy route off the Compose stack so the user doesn't
-                        // get stuck on a blank screen when they press back from the player.
                         navController.popBackStack()
                     } else {
                         navController.popBackStack()
                     }
                 }
-            }
-
-            composable(
-                route = Screen.CategoryBrowse.route,
-                arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val categoryId = backStackEntry.arguments?.getString("categoryId")
-                CategoryBrowseScreen(
-                    initialCategoryId = categoryId,
-                    categories = uiState.categories,
-                    genres = uiState.genres,
-                    movies = uiState.movies,
-                    onMovieClick = { movie ->
-                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
-                    }
-                )
             }
 
             composable(Screen.Referral.route) {
@@ -454,9 +377,15 @@ private fun MainScaffoldWithTabs(
     lockViewModel: LockViewModel
 ) {
     val context = LocalContext.current
+    val tmdbViewModel: TmdbViewModel = hiltViewModel()
+    val allTmdbMovies = tmdbViewModel.shelves.collectAsState().value.values.flatten().distinctBy { it.id }
+
+    // Adjusted tab indices since Downloads (tab index 2) was removed:
+    // 0 -> Home, 1 -> Search, 2 -> Profile
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         bottomBar = {
+            // NOTE: Ensure your MoviesBottomBar component corresponds to these 3 tabs
             MoviesBottomBar(currentTab = currentTab, onTabSelected = onTabSelected)
         }
     ) { paddingValues ->
@@ -476,33 +405,20 @@ private fun MainScaffoldWithTabs(
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
+                    onShowAllClick = { categoryName ->
+                        navController.navigate("category_browse/$categoryName")
+                    },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
-                    onAvatarClick = { onTabSelected(3) }
+                    onAvatarClick = { onTabSelected(2) } // Avatar points to Profile (now tab 2)
                 )
                 1 -> SearchScreen(
-                    movies = uiState.movies,
-                    categories = uiState.categories,
+                    movies = allTmdbMovies,
                     genres = uiState.genres,
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     }
                 )
-                2 -> DownloadsScreen(
-                    downloadedMovies = uiState.downloadedMovies,
-                    // Built purely from the download system (see AppUiState), not
-                    // by intersecting with the live movie catalog -- this is what
-                    // keeps in-progress/completed downloads visible even if a
-                    // movie has been removed/unpublished remotely.
-                    downloadingMovies = uiState.downloadingMovies,
-                    downloadStatuses = uiState.downloadStatuses,
-                    isUnlocked = uiState.isUnlocked,
-                    onMovieClick = { movie ->
-                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
-                    },
-                    onRemoveDownload = { movieId -> viewModel.removeDownload(movieId) },
-                    onSettings = { navController.navigate(Screen.Settings.route) }
-                )
-                3 -> ProfileScreen(
+                2 -> ProfileScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
                     account = uiState.account,
@@ -527,6 +443,7 @@ private fun shareText(context: android.content.Context, text: String) {
     }
     context.startActivity(Intent.createChooser(sendIntent, "Share"))
 }
+
 fun android.content.Context.findActivity(): android.app.Activity? {
     var currentContext = this
     while (currentContext is android.content.ContextWrapper) {

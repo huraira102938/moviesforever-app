@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,10 +39,16 @@ fun PaymentInstructionsScreen(
     paymentDetails: PaymentDetails,
     contactDetails: ContactDetails,
     onSendScreenshotWhatsApp: (referralUsername: String) -> Unit,
+    onRedeemCode: (String, String) -> Unit,
+    redeeming: Boolean,
     onBack: () -> Unit
 ) {
     val clipboard = LocalClipboardManager.current
     var referralUsername by remember { mutableStateOf("") }
+
+    // Sign-in / Redemption state inside checkout
+    var codeId by remember { mutableStateOf("") }
+    var signInUsername by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -138,6 +145,65 @@ fun PaymentInstructionsScreen(
             }
 
             Spacer(Modifier.height(20.dp))
+
+            // --- SIGN IN WITH YOUR CODE SECTION ---
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Gold.copy(alpha = 0.2f), RoundedCornerShape(18.dp))
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(imageVector = Icons.Filled.VpnKey, contentDescription = null, tint = Gold, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Already have your Code ID & Username?",
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Enter your credentials below to instantly activate your lifetime pass.",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = codeId,
+                        onValueChange = { codeId = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Code ID") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = textFieldColors()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = signInUsername,
+                        onValueChange = { signInUsername = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Username") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = textFieldColors()
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    GoldButton(
+                        text = "Sign In & Activate",
+                        onClick = { onRedeemCode(codeId, signInUsername) },
+                        loading = redeeming,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
 
             // Section 1: Membership Benefits
             Text(
@@ -240,21 +306,10 @@ fun PaymentInstructionsScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = DarkSurface,
-                    unfocusedContainerColor = DarkSurface,
-                    focusedBorderColor = Gold,
-                    unfocusedBorderColor = DarkElevated,
-                    focusedLabelColor = Gold,
-                    unfocusedLabelColor = TextMuted,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = Gold
-                )
+                colors = textFieldColors()
             )
             Spacer(Modifier.height(24.dp))
 
-            // Action Call to Action Button
             GoldButton(
                 text = "Send Screenshot on WhatsApp",
                 onClick = { onSendScreenshotWhatsApp(referralUsername) },
@@ -380,3 +435,16 @@ private fun PaymentDetailItem(label: String, value: String, clipboard: Clipboard
         }
     }
 }
+
+@Composable
+private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = DarkSurface,
+    unfocusedContainerColor = DarkSurface,
+    focusedBorderColor = Gold,
+    unfocusedBorderColor = DarkElevated,
+    focusedLabelColor = Gold,
+    unfocusedLabelColor = TextMuted,
+    cursorColor = Gold,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary
+)

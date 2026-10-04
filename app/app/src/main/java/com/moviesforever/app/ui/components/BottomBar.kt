@@ -3,9 +3,7 @@ package com.moviesforever.app.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -13,9 +11,7 @@ import com.moviesforever.app.ui.theme.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.foundation.background
 
 data class BottomTab(
     val label: String,
@@ -25,9 +21,8 @@ data class BottomTab(
 object BottomTabs {
     val Home = BottomTab("Home", Icons.Filled.Home)
     val Search = BottomTab("Search", Icons.Filled.Search)
-    val Downloads = BottomTab("Downloads", Icons.Filled.Download)
     val Profile = BottomTab("Profile", Icons.Filled.Person)
-    val all = listOf(Home, Search, Downloads, Profile)
+    val all = listOf(Home, Search, Profile)
 }
 
 /**

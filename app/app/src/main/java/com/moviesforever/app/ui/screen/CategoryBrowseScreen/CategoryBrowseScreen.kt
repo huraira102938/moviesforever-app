@@ -1,17 +1,14 @@
-package com.moviesforever.app.ui.screen.search
+package com.moviesforever.app.ui.screen.category
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
@@ -20,50 +17,50 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
-import com.moviesforever.app.data.model.TMDB_ID_PREFIX
 import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.theme.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(
+fun CategoryBrowseScreen(
+    categoryTitle: String,
     movies: List<Movie>,
-    genres: List<Genre>, // Kept in signature for NavHost compatibility, but unused
-    onMovieClick: (Movie) -> Unit
+    onMovieClick: (Movie) -> Unit,
+    onBack: () -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf("") }
 
-    // Filter exclusively for TMDB items (Cloudflare R2 storage excluded)
-    val tmdbOnlyMovies = remember(movies) {
-        movies.filter { it.id.startsWith(TMDB_ID_PREFIX) }
-    }
+    // Expanded matching to catch Korean, Others, South, Tamil, etc.
+    val categoryMovies = remember(movies, categoryTitle) {
+        movies.filter { m ->
+            val titleLower = categoryTitle.lowercase()
+            val mCatLower = m.category.lowercase()
 
-    val filtered = remember(tmdbOnlyMovies, query, selectedCategory) {
-        tmdbOnlyMovies.filter { m ->
-            val matchQuery = query.isBlank() || m.title.contains(query, ignoreCase = true)
-
-            // Robust category matching for string variations
-            val matchCat = selectedCategory.isBlank() || when (selectedCategory.lowercase()) {
-                "south" -> m.category.contains("south", ignoreCase = true) || m.genres.any { it.contains("south", ignoreCase = true) }
-                else -> m.category.equals(selectedCategory, ignoreCase = true)
+            when {
+                titleLower.contains("south") -> {
+                    mCatLower.contains("south") || mCatLower.contains("tamil") ||
+                            mCatLower.contains("telugu") || mCatLower.contains("malayalam") ||
+                            mCatLower.contains("kannada") || m.genres.any { g -> g.lowercase().contains("south") || g.lowercase().contains("tamil") }
+                }
+                titleLower.contains("korean") || titleLower.contains("others") -> {
+                    mCatLower.contains("korean") || mCatLower.contains("kdrama") ||
+                            mCatLower.contains("others") || mCatLower.contains("other") ||
+                            m.genres.any { g -> g.lowercase().contains("korean") || g.lowercase().contains("other") } ||
+                            m.title.contains("korean", ignoreCase = true)
+                }
+                else -> mCatLower.equals(titleLower, ignoreCase = true) || m.genres.any { it.equals(categoryTitle, ignoreCase = true) }
             }
-
-            matchQuery && matchCat && !m.paused
         }
     }
 
-    // Shuffled every time the screen opens or filters change
-    val randomizedResults = remember(filtered, query, selectedCategory) {
-        filtered.shuffled()
+    val filteredMovies = remember(categoryMovies, query) {
+        if (query.isBlank()) categoryMovies
+        else categoryMovies.filter { it.title.contains(query, ignoreCase = true) }
     }
-
-    val visibleCategories = listOf("Bollywood", "Hollywood", "South", "Punjabi", "Animation", "Anime")
 
     Column(
         modifier = Modifier
@@ -71,19 +68,32 @@ fun SearchScreen(
             .background(Black)
             .padding(horizontal = 16.dp)
     ) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            IconButton(
+                onClick = onBack,
                 modifier = Modifier
-                    .size(width = 4.dp, height = 18.dp)
-                    .background(Gold, RoundedCornerShape(2.dp))
+                    .size(40.dp)
+                    .background(DarkSurface, CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = categoryTitle,
+                color = TextPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
             )
-            Spacer(Modifier.width(8.dp))
-            Text("Search Catalog", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -91,7 +101,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search movies, anime, shows...", color = TextMuted, fontSize = 13.sp) },
+            placeholder = { Text("Search in $categoryTitle...", color = TextMuted, fontSize = 13.sp) },
             singleLine = true,
             leadingIcon = {
                 Icon(
@@ -126,29 +136,9 @@ fun SearchScreen(
             )
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // Category Filter Chips only (Sub-categories/genres completely removed)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            item {
-                ModernFilterChip(
-                    selected = selectedCategory.isBlank(),
-                    label = "All",
-                    onClick = { selectedCategory = "" }
-                )
-            }
-            items(visibleCategories) { cat ->
-                ModernFilterChip(
-                    selected = selectedCategory.equals(cat, ignoreCase = true),
-                    label = cat,
-                    onClick = { selectedCategory = if (selectedCategory.equals(cat, ignoreCase = true)) "" else cat }
-                )
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        if (randomizedResults.isEmpty()) {
+        if (filteredMovies.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -162,8 +152,6 @@ fun SearchScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Text("No movies found", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Try checking your keywords or filters", color = TextMuted, fontSize = 12.sp)
                 }
             }
         } else {
@@ -174,33 +162,10 @@ fun SearchScreen(
                 contentPadding = PaddingValues(bottom = 16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                items(randomizedResults) { movie ->
+                items(filteredMovies) { movie ->
                     MoviePoster(movie = movie, onClick = { onMovieClick(movie) })
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ModernFilterChip(
-    selected: Boolean,
-    label: String,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (selected) Gold else DarkSurface)
-            .border(1.dp, if (selected) Gold else DarkElevated, CircleShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-    ) {
-        Text(
-            text = label,
-            color = if (selected) Black else TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-        )
     }
 }

@@ -13,10 +13,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,14 +31,14 @@ import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
-import com.moviesforever.app.ui.components.MoviePoster
-import com.moviesforever.app.ui.components.SectionLabels
 import com.moviesforever.app.ui.theme.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.moviesforever.app.data.model.TmdbCategory
+import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.viewmodel.TmdbViewModel
 import kotlinx.coroutines.delay
 
@@ -54,12 +51,31 @@ fun HomeScreen(
     isUnlocked: Boolean,
     onBannerClick: (Banner) -> Unit,
     onMovieClick: (Movie) -> Unit,
+    onShowAllClick: (String) -> Unit,
     onUnlockClick: () -> Unit,
     onAvatarClick: () -> Unit,
     tmdbViewModel: TmdbViewModel = hiltViewModel()
 ) {
-    // TEST FEATURE: shelves loaded from the TMDB JSON files (one list per category)
     val tmdbShelves by tmdbViewModel.shelves.collectAsState()
+
+    val bollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty().shuffled() }
+    val hollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty().shuffled() }
+    val southShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.SOUTH].orEmpty().shuffled() }
+    val punjabiShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.PUNJABI].orEmpty().shuffled() }
+    val othersShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.OTHERS].orEmpty().shuffled() }
+    val animationShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIMATION].orEmpty().shuffled() }
+    val animeShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIME].orEmpty().shuffled() }
+    val trendingShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.TRENDING].orEmpty().shuffled() }
+
+    val categoriesWithShelves = listOf(
+        Triple(TmdbCategory.BOLLYWOOD, TmdbCategory.BOLLYWOOD.title, bollywoodShelf),
+        Triple(TmdbCategory.HOLLYWOOD, TmdbCategory.HOLLYWOOD.title, hollywoodShelf),
+        Triple(TmdbCategory.SOUTH, TmdbCategory.SOUTH.title, southShelf),
+        Triple(TmdbCategory.PUNJABI, TmdbCategory.PUNJABI.title, punjabiShelf),
+        Triple(TmdbCategory.OTHERS, "Korean & Others", othersShelf), // Updated title here
+        Triple(TmdbCategory.ANIMATION, TmdbCategory.ANIMATION.title, animationShelf),
+        Triple(TmdbCategory.ANIME, TmdbCategory.ANIME.title, animeShelf)
+    )
 
     LazyColumn(
         modifier = Modifier
@@ -108,17 +124,14 @@ fun HomeScreen(
             }
         }
 
-        // Hero Banner Carousel
+        // Hero Banner Carousel (Unclickable)
         if (banners.isNotEmpty()) {
             item {
-                ModernBannerCarousel(banners = banners, onClick = onBannerClick)
+                ModernBannerCarousel(banners = banners)
                 Spacer(Modifier.height(16.dp))
             }
         }
 
-        // Single admin-controlled offer banner (note text comes entirely from
-        // the admin panel; only the "Limited Time Offer" label and "Get Pass"
-        // button are app-owned chrome around it).
         if (!isUnlocked) {
             item {
                 ModernOfferBanner(
@@ -129,73 +142,38 @@ fun HomeScreen(
             }
         }
 
-        // TEST FEATURE: these four shelves replace Recently Added / Hot / All-time Hit /
-        // Hit of This Year. Data comes from bollywood.json, hollywood.json, south.json, punjabi.json.
-        listOf(
-            TmdbCategory.BOLLYWOOD,
-            TmdbCategory.HOLLYWOOD,
-            TmdbCategory.SOUTH,
-            TmdbCategory.PUNJABI
-        ).forEach { cat ->
-            val shelf = tmdbShelves[cat].orEmpty()
+        // TMDB Shelves with shuffled preview (max 5 items) and "Show All" button
+        categoriesWithShelves.forEach { (catEnum, title, shelf) ->
             if (shelf.isNotEmpty()) {
-                item(key = "tmdb_${cat.name}") {
-                    ModernSectionRow(title = cat.title, movies = shelf, onMovieClick = onMovieClick)
+                item(key = "tmdb_${catEnum.name}") {
+                    ModernSectionRow(
+                        title = title,
+                        movies = shelf.take(5),
+                        onMovieClick = onMovieClick,
+                        onShowAllClick = { onShowAllClick(catEnum.name) }
+                    )
                 }
             }
         }
 
-        // Free Shelf
-        val freeMovies = movies.filter { it.isFree && !it.paused }
-        if (freeMovies.isNotEmpty()) {
-            item {
-                ModernSectionRow(
-                    title = "Free to Watch",
-                    movies = freeMovies,
-                    onMovieClick = onMovieClick
-                )
-            }
-        }
-
-        // TEST FEATURE: Korean, Animation, Anime shelves (same row design as above)
-        listOf(
-            TmdbCategory.OTHERS,
-            TmdbCategory.ANIMATION,
-            TmdbCategory.ANIME
-        ).forEach { cat ->
-            val shelf = tmdbShelves[cat].orEmpty()
-            if (shelf.isNotEmpty()) {
-                item(key = "tmdb_${cat.name}") {
-                    ModernSectionRow(title = cat.title, movies = shelf, onMovieClick = onMovieClick)
-                }
-            }
-        }
-
-        // TEST FEATURE: Trending (from trending.json) -- same grid design as the old
-        // "Trending Now" section, at the very bottom of the home feed.
-        val tmdbTrending = tmdbShelves[TmdbCategory.TRENDING].orEmpty()
-        if (tmdbTrending.isNotEmpty()) {
+        if (trendingShelf.isNotEmpty()) {
             item(key = "tmdb_TRENDING") {
                 TrendingSection(
-                    movies = tmdbTrending,
+                    movies = trendingShelf.take(6),
                     onMovieClick = onMovieClick
                 )
             }
         }
     }
 }
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Unit) {
+private fun ModernBannerCarousel(banners: List<Banner>) {
     val actualCount = banners.size
     val isLooping = actualCount > 1
-
-    // Small, fixed virtual count — plenty for looping, cheap to measure.
-    // e.g. with 4 banners this gives 100 "laps" before it resets.
     val virtualPageCount = if (isLooping) actualCount * 25 else actualCount
-
     val startPage = if (isLooping) {
-        // Start in the middle lap, aligned to a real banner index (page 0)
         val midLap = (virtualPageCount / actualCount) / 2
         midLap * actualCount
     } else 0
@@ -204,7 +182,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
         initialPage = startPage,
         pageCount = { virtualPageCount }
     )
-
     val currentRealIndex = pagerState.currentPage % actualCount
 
     LaunchedEffect(actualCount) {
@@ -215,9 +192,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
             if (next < virtualPageCount - 1) {
                 pagerState.animateScrollToPage(next)
             } else {
-                // Near the end of our virtual range: jump back to an
-                // aligned page instantly (same real banner, invisible to user),
-                // then continue looping forward from there.
                 pagerState.scrollToPage(startPage)
             }
         }
@@ -235,9 +209,7 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
             val banner = banners[page % actualCount]
             Card(
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable { onClick(banner) },
+                modifier = Modifier.fillMaxSize(),
                 colors = CardDefaults.cardColors(containerColor = DarkSurface)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -261,54 +233,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
                                 )
                             )
                     )
-
-                    if (!banner.clickable) {
-
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                color = Gold.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Gold)
-                            ) {
-                                Text(
-                                    text = "🔥 Featured",
-                                    color = Gold,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .background(Gold, CircleShape)
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Black,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "Watch",
-                                    color = Black,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -337,7 +261,6 @@ private fun ModernBannerCarousel(banners: List<Banner>, onClick: (Banner) -> Uni
 @Composable
 private fun ModernOfferBanner(note: String, onClick: () -> Unit) {
     val trimmedNote = note.trim()
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -355,26 +278,17 @@ private fun ModernOfferBanner(note: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
-
-        // Fully admin-controlled copy (settings/pricing.note). The app
-            // never hardcodes offer text -- only this label and the button
-            // around it are app-owned chrome.
-            if (trimmedNote.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = trimmedNote,
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
+        if (trimmedNote.isNotEmpty()) {
+            Text(
+                text = trimmedNote,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
-
+}
 
 @Composable
 private fun TrendingSection(
@@ -403,18 +317,10 @@ private fun TrendingSection(
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            Text(
-                text = "${movies.size} Movies",
-                color = TextMuted,
-                fontSize = 12.sp
-            )
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // Plain grid, stacked in a Column -- intentionally NOT a
-        // LazyRow/horizontal scroller.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -433,8 +339,6 @@ private fun TrendingSection(
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    // Keep tile width consistent when the last row has
-                    // fewer than 3 items.
                     repeat(3 - rowMovies.size) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
@@ -464,37 +368,14 @@ private fun TrendingGridTile(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            if (movie.isFree) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .background(Gold.copy(alpha = 0.9f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "FREE",
-                        color = Black,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            movie.badge?.let { badge ->
-                Text(
-                    text = badge,
-                    fontSize = 16.sp,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(4.dp)
-                )
-            }
         }
         Spacer(Modifier.height(6.dp))
         Text(
             text = movie.title,
             color = TextMuted,
             fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
         )
     }
 }
@@ -503,7 +384,8 @@ private fun TrendingGridTile(
 private fun ModernSectionRow(
     title: String,
     movies: List<Movie>,
-    onMovieClick: (Movie) -> Unit
+    onMovieClick: (Movie) -> Unit,
+    onShowAllClick: () -> Unit
 ) {
     Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Row(
@@ -528,14 +410,17 @@ private fun ModernSectionRow(
                 )
             }
 
-            Text(
-                text = "${movies.size} Movies",
-                color = TextMuted,
-                fontSize = 12.sp
-            )
+            TextButton(onClick = onShowAllClick) {
+                Text(
+                    text = "Show All",
+                    color = Gold,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
