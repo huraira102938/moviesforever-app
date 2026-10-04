@@ -270,12 +270,15 @@ fun MovieDetailScreen(
                             onClick = onWatchNow,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        Spacer(Modifier.height(10.dp))
-                        GoldOutlinedButton(
-                            text = "Download Offline",
-                            onClick = onDownload,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // "Download Offline" button removed (test feature). Trailer shown instead.
+                        if (hasTrailer) {
+                            Spacer(Modifier.height(10.dp))
+                            GoldOutlinedButton(
+                                text = "Watch Trailer",
+                                onClick = onWatchTrailer,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             } else {

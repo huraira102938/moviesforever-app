@@ -38,6 +38,11 @@ import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.components.SectionLabels
 import com.moviesforever.app.ui.theme.*
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.moviesforever.app.data.model.TmdbCategory
+import com.moviesforever.app.ui.viewmodel.TmdbViewModel
 import kotlinx.coroutines.delay
 
 @Composable
@@ -50,8 +55,12 @@ fun HomeScreen(
     onBannerClick: (Banner) -> Unit,
     onMovieClick: (Movie) -> Unit,
     onUnlockClick: () -> Unit,
-    onAvatarClick: () -> Unit
+    onAvatarClick: () -> Unit,
+    tmdbViewModel: TmdbViewModel = hiltViewModel()
 ) {
+    // TEST FEATURE: shelves loaded from the TMDB JSON files (one list per category)
+    val tmdbShelves by tmdbViewModel.shelves.collectAsState()
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -120,27 +129,18 @@ fun HomeScreen(
             }
         }
 
-        // Curated Shelves
-        SectionLabels.orderedSections.forEach { section ->
-            val sectionMovies = movies.filter { it.sections.contains(section) && !it.paused }
-            if (sectionMovies.isNotEmpty()) {
-                item {
-                    if (section == SectionLabels.ALL_TIME_HIT) {
-                        // All-time Hit is ordered newest-year-first, oldest
-                        // last. The year itself is never shown to the user --
-                        // it only drives the internal ordering.
-                        ModernSectionRow(
-                            title = SectionLabels.label(section),
-                            movies = sectionMovies.sortedByDescending { it.year ?: Int.MIN_VALUE },
-                            onMovieClick = onMovieClick
-                        )
-                    } else {
-                        ModernSectionRow(
-                            title = SectionLabels.label(section),
-                            movies = sectionMovies,
-                            onMovieClick = onMovieClick
-                        )
-                    }
+        // TEST FEATURE: these four shelves replace Recently Added / Hot / All-time Hit /
+        // Hit of This Year. Data comes from bollywood.json, hollywood.json, south.json, punjabi.json.
+        listOf(
+            TmdbCategory.BOLLYWOOD,
+            TmdbCategory.HOLLYWOOD,
+            TmdbCategory.SOUTH,
+            TmdbCategory.PUNJABI
+        ).forEach { cat ->
+            val shelf = tmdbShelves[cat].orEmpty()
+            if (shelf.isNotEmpty()) {
+                item(key = "tmdb_${cat.name}") {
+                    ModernSectionRow(title = cat.title, movies = shelf, onMovieClick = onMovieClick)
                 }
             }
         }
@@ -157,13 +157,27 @@ fun HomeScreen(
             }
         }
 
-        // Trending Now -- curated by the admin panel's dedicated "Trending"
-        // page (its own movieId + order list, not a section tag). Shown at
-        // the very bottom of the home feed as a static grid, not a row.
-        if (trendingMovies.isNotEmpty()) {
-            item {
+        // TEST FEATURE: Korean, Animation, Anime shelves (same row design as above)
+        listOf(
+            TmdbCategory.OTHERS,
+            TmdbCategory.ANIMATION,
+            TmdbCategory.ANIME
+        ).forEach { cat ->
+            val shelf = tmdbShelves[cat].orEmpty()
+            if (shelf.isNotEmpty()) {
+                item(key = "tmdb_${cat.name}") {
+                    ModernSectionRow(title = cat.title, movies = shelf, onMovieClick = onMovieClick)
+                }
+            }
+        }
+
+        // TEST FEATURE: Trending (from trending.json) -- same grid design as the old
+        // "Trending Now" section, at the very bottom of the home feed.
+        val tmdbTrending = tmdbShelves[TmdbCategory.TRENDING].orEmpty()
+        if (tmdbTrending.isNotEmpty()) {
+            item(key = "tmdb_TRENDING") {
                 TrendingSection(
-                    movies = trendingMovies,
+                    movies = tmdbTrending,
                     onMovieClick = onMovieClick
                 )
             }

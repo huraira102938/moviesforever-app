@@ -34,6 +34,9 @@ import com.moviesforever.app.ui.screen.celebration.CelebrationScreen
 import com.moviesforever.app.ui.screen.detail.MovieDetailScreen
 import com.moviesforever.app.ui.screen.downloads.DownloadsScreen
 import com.moviesforever.app.ui.screen.home.HomeScreen
+import com.moviesforever.app.data.model.TMDB_ID_PREFIX
+import com.moviesforever.app.data.remote.openExternalLink
+import com.moviesforever.app.ui.viewmodel.TmdbViewModel
 import com.moviesforever.app.ui.screen.lock.LockScreen
 import com.moviesforever.app.ui.screen.notifications.NotificationsScreen
 import com.moviesforever.app.ui.screen.paused.PausedScreen
@@ -274,17 +277,23 @@ fun MoviesForeverNavHost(
                 arguments = listOf(navArgument("movieId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
-                val movie = uiState.movies.find { it.id == movieId }
+                // TEST FEATURE: movies from the TMDB JSON files are looked up here too
+                val tmdbViewModel: TmdbViewModel = hiltViewModel()
+                val movie = uiState.movies.find { it.id == movieId } ?: tmdbViewModel.findMovie(movieId)
                 if (movie == null) {
                     navController.popBackStack()
                 } else {
+                    val isTmdb = movie.id.startsWith(TMDB_ID_PREFIX)
                     MovieDetailScreen(
                         movie = movie,
                         pricing = uiState.pricing,
                         isUnlocked = uiState.isUnlocked,
                         genres = uiState.genres.associate { it.id to it.name },
                         downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
-                        onWatchNow = {
+                        onWatchNow = onWatchNow@{
+                            // TEST FEATURE: Watch Now intentionally does nothing for TMDB movies yet
+                            // (legal watch links will be added later).
+                            if (isTmdb) return@onWatchNow
                             // Defense-in-depth against the paused-guard race: the
                             // NavHost-level LaunchedEffect (see above) redirects to
                             // PausedScreen as soon as account.paused flips true, but
@@ -306,7 +315,11 @@ fun MoviesForeverNavHost(
                                 }
                             }
                         },
-                        onWatchTrailer = {
+                        onWatchTrailer = onWatchTrailer@{
+                            if (isTmdb) {
+                                openExternalLink(context, movie.trailerUrl.orEmpty())
+                                return@onWatchTrailer
+                            }
                             if (uiState.account?.paused == true) {
                                 navController.navigate(Screen.Paused.route) {
                                     popUpTo(0) { inclusive = true }
