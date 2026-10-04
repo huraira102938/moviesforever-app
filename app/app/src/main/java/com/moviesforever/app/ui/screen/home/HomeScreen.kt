@@ -60,21 +60,21 @@ fun HomeScreen(
     // homeShelves = rating above 7 only, shuffled once per app launch (stable until app is closed).
     val tmdbShelves by tmdbViewModel.homeShelves.collectAsState()
 
-    val bollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty() }
-    val hollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty() }
-    val southShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.SOUTH].orEmpty() }
-    val punjabiShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.PUNJABI].orEmpty() }
-    val othersShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.OTHERS].orEmpty() }
-    val animationShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIMATION].orEmpty() }
-    val animeShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIME].orEmpty() }
-    val trendingShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.TRENDING].orEmpty() }
+    val bollywoodShelf = tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty()
+    val hollywoodShelf = tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty()
+    val southShelf = tmdbShelves[TmdbCategory.SOUTH].orEmpty()
+    val punjabiShelf = tmdbShelves[TmdbCategory.PUNJABI].orEmpty()
+    val othersShelf = tmdbShelves[TmdbCategory.OTHERS].orEmpty()
+    val animationShelf = tmdbShelves[TmdbCategory.ANIMATION].orEmpty()
+    val animeShelf = tmdbShelves[TmdbCategory.ANIME].orEmpty()
+    val trendingShelf = tmdbShelves[TmdbCategory.TRENDING].orEmpty()
 
     val categoriesWithShelves = listOf(
         Triple(TmdbCategory.BOLLYWOOD, TmdbCategory.BOLLYWOOD.title, bollywoodShelf),
         Triple(TmdbCategory.HOLLYWOOD, TmdbCategory.HOLLYWOOD.title, hollywoodShelf),
         Triple(TmdbCategory.SOUTH, TmdbCategory.SOUTH.title, southShelf),
         Triple(TmdbCategory.PUNJABI, TmdbCategory.PUNJABI.title, punjabiShelf),
-        Triple(TmdbCategory.OTHERS, "Korean & Others", othersShelf), // Updated title here
+        Triple(TmdbCategory.OTHERS, "Korean & Others", othersShelf),
         Triple(TmdbCategory.ANIMATION, TmdbCategory.ANIMATION.title, animationShelf),
         Triple(TmdbCategory.ANIME, TmdbCategory.ANIME.title, animeShelf)
     )

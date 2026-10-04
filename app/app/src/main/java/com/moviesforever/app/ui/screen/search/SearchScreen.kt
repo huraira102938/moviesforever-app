@@ -58,10 +58,7 @@ fun SearchScreen(
         }
     }
 
-    // Shuffled every time the screen opens or filters change
-    val randomizedResults = remember(filtered, query, selectedCategory) {
-        filtered.shuffled()
-    }
+    val randomizedResults = filtered
 
     val visibleCategories = listOf("Bollywood", "Hollywood", "South", "Punjabi", "Animation", "Anime")
 
