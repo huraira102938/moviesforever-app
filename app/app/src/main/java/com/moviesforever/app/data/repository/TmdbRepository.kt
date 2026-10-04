@@ -20,6 +20,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import kotlin.random.Random
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -28,8 +29,16 @@ import javax.inject.Singleton
 /**
  * TEST FEATURE: downloads the 8 category JSON files from Cloudflare, caches them in the app's
  * private storage, and exposes them as Movie lists per category.
- *  - cached copy is shown immediately, fresh copy replaces it when the download finishes
+ *
+ * Session behaviour (one "session" = one app process, i.e. from open until the app is closed):
+ *  - every category is shuffled ONCE per session with [sessionSeed]
+ *  - each category is published ONCE per session (write-once). Going to Search / Detail and
+ *    back, re-creating ViewModels, or a late/retried download never re-orders or swaps a shelf
+ *  - a fresh download is still saved to disk, so the NEXT app launch gets the new data
+ *    (and a new random order)
  *  - no internet / bad JSON -> keeps the cached copy (or an empty shelf). Never crashes.
+ *
+ * Nothing is persisted in memory beyond the process, so closing the app resets everything.
  */
 @Singleton
 class TmdbRepository @Inject constructor(
@@ -46,20 +55,25 @@ class TmdbRepository @Inject constructor(
 
     private val started = AtomicBoolean(false)
 
+    /** New value every time the app process starts -> new random order on every app launch. */
+    private val sessionSeed: Long = System.nanoTime()
+
     suspend fun load() {
         if (!started.compareAndSet(false, true)) return
         var anyFailed = false
         withContext(Dispatchers.IO) {
             // 1) cached data first (instant)
             TmdbCategory.values().forEach { cat ->
-                readCache(cat)?.let { publish(cat, it) }
+                readCache(cat)?.let { publishOnce(cat, it) }
             }
-            // 2) refresh all files in parallel
+            // 2) refresh all files in parallel. The download is always saved to disk (for the
+            //    next launch), but it only reaches the screen if this category has nothing yet
+            //    (first ever launch / no cache) -- otherwise the shelf would change mid-session.
             coroutineScope {
                 TmdbCategory.values().map { cat ->
                     async {
                         val fresh = try { download(cat) } catch (e: Exception) { null }
-                        if (fresh != null) publish(cat, fresh) else anyFailed = true
+                        if (fresh != null) publishOnce(cat, fresh) else anyFailed = true
                     }
                 }.awaitAll()
             }
@@ -67,8 +81,13 @@ class TmdbRepository @Inject constructor(
         if (anyFailed) started.set(false) // allow a retry next time the home screen opens
     }
 
-    private fun publish(cat: TmdbCategory, list: List<Movie>) {
-        _shelves.update { it + (cat to list) }
+    /**
+     * Write-once per session: shuffles with the session seed and publishes only if this category
+     * has not been published yet. Later calls for the same category are ignored.
+     */
+    private fun publishOnce(cat: TmdbCategory, list: List<Movie>) {
+        val shuffled = list.shuffled(Random(sessionSeed + cat.ordinal))
+        _shelves.update { current -> if (cat in current) current else current + (cat to shuffled) }
     }
 
     private fun download(cat: TmdbCategory): List<Movie>? {

@@ -56,16 +56,18 @@ fun HomeScreen(
     onAvatarClick: () -> Unit,
     tmdbViewModel: TmdbViewModel = hiltViewModel()
 ) {
-    val tmdbShelves by tmdbViewModel.shelves.collectAsState()
+    // TEST FEATURE: shelves loaded from the TMDB JSON files (one list per category).
+    // homeShelves = rating above 7 only, shuffled once per app launch (stable until app is closed).
+    val tmdbShelves by tmdbViewModel.homeShelves.collectAsState()
 
-    val bollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty().shuffled() }
-    val hollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty().shuffled() }
-    val southShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.SOUTH].orEmpty().shuffled() }
-    val punjabiShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.PUNJABI].orEmpty().shuffled() }
-    val othersShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.OTHERS].orEmpty().shuffled() }
-    val animationShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIMATION].orEmpty().shuffled() }
-    val animeShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIME].orEmpty().shuffled() }
-    val trendingShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.TRENDING].orEmpty().shuffled() }
+    val bollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty() }
+    val hollywoodShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty() }
+    val southShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.SOUTH].orEmpty() }
+    val punjabiShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.PUNJABI].orEmpty() }
+    val othersShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.OTHERS].orEmpty() }
+    val animationShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIMATION].orEmpty() }
+    val animeShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.ANIME].orEmpty() }
+    val trendingShelf = remember(tmdbShelves) { tmdbShelves[TmdbCategory.TRENDING].orEmpty() }
 
     val categoriesWithShelves = listOf(
         Triple(TmdbCategory.BOLLYWOOD, TmdbCategory.BOLLYWOOD.title, bollywoodShelf),
@@ -426,7 +428,7 @@ private fun ModernSectionRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(movies) { movie ->
+            items(movies, key = { it.id }) { movie ->
                 MoviePoster(movie = movie, onClick = { onMovieClick(movie) })
             }
         }
