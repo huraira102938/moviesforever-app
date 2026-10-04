@@ -25,12 +25,20 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.MoviesForever"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- NEW NATIVE PLAYER ACTIVITY -->
+        <activity
+            android:name=".ui.screen.player.PlayerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
 
         <service
             android:name=".download.MoviesForeverDownloadService"

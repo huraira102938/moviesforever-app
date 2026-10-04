@@ -41,8 +41,6 @@ import com.moviesforever.app.ui.screen.lock.LockScreen
 import com.moviesforever.app.ui.screen.notifications.NotificationsScreen
 import com.moviesforever.app.ui.screen.paused.PausedScreen
 import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
-import com.moviesforever.app.ui.screen.player.PlayerScreen
-import com.moviesforever.app.ui.screen.player.findActivity
 import com.moviesforever.app.ui.screen.profile.ProfileScreen
 import com.moviesforever.app.ui.screen.referral.ReferralScreen
 import com.moviesforever.app.ui.screen.search.SearchScreen
@@ -291,17 +289,6 @@ fun MoviesForeverNavHost(
                         genres = uiState.genres.associate { it.id to it.name },
                         downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = onWatchNow@{
-                            // TEST FEATURE: Watch Now intentionally does nothing for TMDB movies yet
-                            // (legal watch links will be added later).
-                            if (isTmdb) return@onWatchNow
-                            // Defense-in-depth against the paused-guard race: the
-                            // NavHost-level LaunchedEffect (see above) redirects to
-                            // PausedScreen as soon as account.paused flips true, but
-                            // if the admin pauses the user in the split-second while
-                            // they're already browsing, a fast tap here could still
-                            // slip through before that redirect lands. Re-check the
-                            // live paused flag right at the point of action so a
-                            // paused user can never actually start a stream.
                             if (uiState.account?.paused == true) {
                                 navController.navigate(Screen.Paused.route) {
                                     popUpTo(0) { inclusive = true }
@@ -369,20 +356,34 @@ fun MoviesForeverNavHost(
             ) { backStackEntry ->
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
                 val isTrailer = backStackEntry.arguments?.getBoolean("trailer") == true
-                val movie = uiState.movies.find { it.id == movieId }
+
+                val tmdbViewModel: TmdbViewModel = hiltViewModel()
+                val movie = uiState.movies.find { it.id == movieId } ?: tmdbViewModel.findMovie(movieId)
+
                 if (movie == null) {
                     navController.popBackStack()
                 } else {
-                    val url = if (isTrailer) movie.trailerUrl else movie.videoUrl
-                    if (url.isNullOrBlank()) {
+                    val url = if (isTrailer) {
+                        movie.trailerUrl
+                    } else if (movie.id.startsWith(TMDB_ID_PREFIX)) {
+                        val actualTmdbId = movie.id.removePrefix(TMDB_ID_PREFIX)
+                        "https://vidsrc.sbs/embed/movie/$actualTmdbId"
+                    } else {
+                        movie.videoUrl
+                    }
+
+                    if (!url.isNullOrBlank()) {
+                        // Launch the native PlayerActivity
+                        val intent = Intent(context, com.moviesforever.app.ui.screen.player.PlayerActivity::class.java).apply {
+                            putExtra("EXTRA_VIDEO_URL", url)
+                        }
+                        context.startActivity(intent)
+
+                        // Immediately pop this dummy route off the Compose stack so the user doesn't
+                        // get stuck on a blank screen when they press back from the player.
                         navController.popBackStack()
                     } else {
-                        PlayerScreen(
-                            videoUrl = url,
-                            title = movie.title,
-                            onBack = { navController.popBackStackSafe() },
-                            cacheKey = if (isTrailer) null else movie.id
-                        )
+                        navController.popBackStack()
                     }
                 }
             }
@@ -525,4 +526,14 @@ private fun shareText(context: android.content.Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(sendIntent, "Share"))
+}
+fun android.content.Context.findActivity(): android.app.Activity? {
+    var currentContext = this
+    while (currentContext is android.content.ContextWrapper) {
+        if (currentContext is android.app.Activity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
 }

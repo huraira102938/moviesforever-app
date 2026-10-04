@@ -1,881 +1,143 @@
 package com.moviesforever.app.ui.screen.player
 
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
-import android.net.Uri
+import android.graphics.Color
+import android.os.Bundle
 import android.util.Log
-import androidx.annotation.OptIn
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.ClosedCaptionOff
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
-import com.moviesforever.app.BuildConfig
-import com.moviesforever.app.download.DownloadUtil
-import com.moviesforever.app.ui.theme.Black
-import com.moviesforever.app.ui.theme.DarkElevated
-import com.moviesforever.app.ui.theme.DarkSurface
-import com.moviesforever.app.ui.theme.Gold
-import com.moviesforever.app.ui.theme.TextPrimary
-import java.util.Locale
-import kotlinx.coroutines.delay
-import androidx.compose.ui.platform.LocalView
+import android.view.Gravity
+import android.view.View
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import android.widget.ImageButton
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
-private const val TAG = "PlayerScreen"
+class PlayerActivity : Activity() {
 
+    private lateinit var webView: WebView
 
-fun Context.findActivity(): Activity? {
-    var currentContext = this
-    while (currentContext is ContextWrapper) {
-        if (currentContext is Activity) {
-            return currentContext
-        }
-        currentContext = currentContext.baseContext
-    }
-    return null
-}
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-data class SubtitleTrackInfo(
-    val groupIndex: Int,
-    val trackIndex: Int,
-    val language: String,
-    val label: String
-)
+        // 1. Keep screen awake during playback
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-data class AudioTrackInfo(
-    val groupIndex: Int,
-    val trackIndex: Int,
-    val language: String,
-    val label: String
-)
-
-data class ResizeModeOption(
-    val mode: Int,
-    val label: String
-)
-
-@OptIn(UnstableApi::class)
-private val resizeModeOptions = listOf(
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Fit (show full video)"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom (crop to fill)"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Stretch to fill"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Fixed width"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Fixed height")
-)
-
-/**
- * Maps ExoPlayer's PlaybackException error codes to plain-English messages.
- * The raw error code + name is also shown underneath so you (or the user, if
- * they report a bug) can tell you exactly which category the failure fell into.
- */
-fun getPlaybackErrorMessage(error: PlaybackException): String {
-    return when (error.errorCode) {
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-            "Network connection issue. Check your internet and try again."
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
-            "Server rejected the request (bad link or expired access). Try again later."
-        PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
-            "Video file not found. The source link may be broken or removed."
-        PlaybackException.ERROR_CODE_IO_NO_PERMISSION ->
-            "Access denied to this video source."
-        PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED ->
-            "Insecure (HTTP) link blocked. Video source needs to use HTTPS."
-        PlaybackException.ERROR_CODE_IO_UNSPECIFIED ->
-            "Couldn't load the video source. The link may be invalid."
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
-        PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
-            "This video file appears to be corrupted or malformed."
-        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
-            "This video's file format isn't supported."
-        PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-        PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ->
-            "Your device doesn't support this video's format (codec)."
-        PlaybackException.ERROR_CODE_DECODING_FAILED ->
-            "Decoding failed. The video codec may be incompatible with this device."
-        PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
-        PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
-        PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
-            "This video is protected (DRM) and can't be played."
-        PlaybackException.ERROR_CODE_TIMEOUT ->
-            "Playback timed out. Try again."
-        else ->
-            "Playback failed: ${error.errorCodeName} (${error.message ?: "unknown reason"})"
-    }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-fun PlayerScreen(
-    videoUrl: String,
-    title: String,
-    onBack: () -> Unit,
-    cacheKey: String? = null
-) {
-    val context = LocalContext.current
-    val activity = context.findActivity()
-
-    var isFullScreenAspect by remember { mutableStateOf(false) }
-    var showOverlayControls by remember { mutableStateOf(true) }
-
-    // Subtitle management states
-    var subtitlesEnabled by remember { mutableStateOf(true) }
-    var availableSubtitles by remember { mutableStateOf<List<SubtitleTrackInfo>>(emptyList()) }
-    var selectedSubtitleTrack by remember { mutableStateOf<SubtitleTrackInfo?>(null) }
-    var showSubtitleDialog by remember { mutableStateOf(false) }
-
-    // Audio track management states
-    var availableAudioTracks by remember { mutableStateOf<List<AudioTrackInfo>>(emptyList()) }
-    var selectedAudioTrack by remember { mutableStateOf<AudioTrackInfo?>(null) }
-    var showAudioDialog by remember { mutableStateOf(false) }
-
-    // Video resize / aspect-ratio mode state
-    var currentResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
-    var showAspectRatioDialog by remember { mutableStateOf(false) }
-
-    // Playback error / diagnostics state
-    var playbackError by remember { mutableStateOf<PlaybackException?>(null) }
-
-    // --- Diagnostic state, added to catch the "loads forever" bug ---
-    // playerState mirrors ExoPlayer's internal state so a watchdog effect below
-    // can react to it (Compose can't observe ExoPlayer's own state directly).
-    var playerState by remember { mutableStateOf(Player.STATE_IDLE) }
-    var loadStartedAtMs by remember { mutableStateOf(0L) }
-
-    // Initialize ExoPlayer
-    val exoPlayer = remember(videoUrl, cacheKey) {
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Preparing player for url=$videoUrl cacheKey=$cacheKey")
-        }
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(DownloadUtil.getCacheDataSourceFactory(context))
-        val mediaItem = MediaItem.Builder()
-            .setUri(Uri.parse(videoUrl))
-            .apply { cacheKey?.let { setCustomCacheKey(it) } }
-            .build()
-
-        // Retain the last 30s of played samples in memory so backward seeks
-        // within that window are instant instead of re-triggering a load.
-        // Data is already in our disk cache / already fetched — this just
-        // delays discarding it from ExoPlayer's in-memory sample buffer.
-        val loadControl = DefaultLoadControl.Builder()
-            .setBackBuffer(
-                /* backBufferDurationMs = */ 30_000,
-                /* retainBackBufferFromKeyframe = */ true
-            )
-            .build()
-
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setLoadControl(loadControl)
-            // Duck/pause automatically for phone calls, other apps' audio, etc.,
-            // and resume when focus is regained, instead of playing over them.
-            .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
-            .build()
-            .apply {
-                setMediaItem(mediaItem)
-                prepare()
-                playWhenReady = true
-            }
-    }
-
-    // Immersive mode: hide the status bar and gesture-nav bar while the player
-    // is on screen, restoring them the moment this screen is left. Without
-    // this, the notification bar and the bottom gesture pill stay visible the
-    // whole time, which is distracting for a full-screen video player. Swiping
-    // from an edge still temporarily reveals the bars (BEHAVIOR_SHOW_TRANSIENT_
-    // BARS_BY_SWIPE), same as YouTube/Netflix, so the user isn't ever fully
-    // locked out of system gestures.
-    val view = LocalView.current
-    DisposableEffect(Unit) {
-        val window = activity?.window
-        val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
-        insetsController?.apply {
+        // 2. Fullscreen Immersive Mode
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        onDispose {
-            window?.let { WindowCompat.getInsetsController(it, view) }
-                ?.show(WindowInsetsCompat.Type.systemBars())
-        }
-    }
 
-    // Listen for available tracks (Text and Audio) + playback errors
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) {
-                val subtitleList = mutableListOf<SubtitleTrackInfo>()
-                val audioList = mutableListOf<AudioTrackInfo>()
-
-                for (groupIndex in 0 until tracks.groups.size) {
-                    val trackGroup = tracks.groups[groupIndex]
-                    if (trackGroup.type == C.TRACK_TYPE_TEXT) {
-                        for (trackIndex in 0 until trackGroup.length) {
-                            val format = trackGroup.getTrackFormat(trackIndex)
-                            val lang = format.language ?: "Unknown"
-                            val label = format.label ?: "Track ${subtitleList.size + 1} ($lang)"
-                            subtitleList.add(
-                                SubtitleTrackInfo(
-                                    groupIndex = groupIndex,
-                                    trackIndex = trackIndex,
-                                    language = lang,
-                                    label = label
-                                )
-                            )
-                        }
-                    } else if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
-                        for (trackIndex in 0 until trackGroup.length) {
-                            val format = trackGroup.getTrackFormat(trackIndex)
-
-                            val langCode = format.language?.takeIf { it.isNotBlank() && it != "und" }
-                            val languageName = if (langCode != null) {
-                                Locale(langCode).displayLanguage.replaceFirstChar { it.uppercase() }
-                            } else {
-                                "Audio Track ${audioList.size + 1}"
-                            }
-
-                            val channels = if (format.channelCount > 0) " (${format.channelCount}ch)" else ""
-                            val label = if (langCode != null) {
-                                "$languageName$channels"
-                            } else {
-                                "Track ${audioList.size + 1}$channels"
-                            }
-
-                            val trackInfo = AudioTrackInfo(
-                                groupIndex = groupIndex,
-                                trackIndex = trackIndex,
-                                language = langCode ?: "Unknown",
-                                label = label
-                            )
-                            audioList.add(trackInfo)
-
-                            if (trackGroup.isTrackSelected(trackIndex) && selectedAudioTrack == null) {
-                                selectedAudioTrack = trackInfo
-                            }
-                        }
-                    }
-                }
-                availableSubtitles = subtitleList
-                availableAudioTracks = audioList
-            }
-
-            override fun onPlayerError(error: PlaybackException) {
-                // This is the key hook: ExoPlayer stops silently unless we catch this.
-                Log.e(
-                    TAG,
-                    "Playback error for url=$videoUrl code=${error.errorCode} " +
-                            "name=${error.errorCodeName} message=${error.message}",
-                    error
-                )
-                // Log the full cause chain too -- often the real reason (e.g. an
-                // HttpDataSource.InvalidResponseCodeException with the actual HTTP
-                // status) is nested inside error.cause, not in the top-level message.
-                var cause: Throwable? = error.cause
-                var depth = 0
-                while (cause != null && depth < 5) {
-                    Log.e(TAG, "  caused by [$depth]: ${cause.javaClass.simpleName}: ${cause.message}")
-                    cause = cause.cause
-                    depth++
-                }
-                playbackError = error
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                // Clear a stale error once playback actually starts progressing again
-                if (playbackState == Player.STATE_READY) {
-                    playbackError = null
-                }
-                val name = when (playbackState) {
-                    Player.STATE_IDLE -> "IDLE"
-                    Player.STATE_BUFFERING -> "BUFFERING"
-                    Player.STATE_READY -> "READY"
-                    Player.STATE_ENDED -> "ENDED"
-                    else -> "UNKNOWN($playbackState)"
-                }
-                Log.d(
-                    TAG,
-                    "onPlaybackStateChanged: $name position=${exoPlayer.currentPosition}ms " +
-                            "bufferedPosition=${exoPlayer.bufferedPosition}ms " +
-                            "bufferedDuration=${exoPlayer.totalBufferedDuration}ms"
-                )
-                playerState = playbackState
-            }
-
-            // Fires whenever ExoPlayer starts/stops actively loading data from the
-            // source - this is the direct signal for "spinner is showing right now".
-            // Logging the elapsed duration here is what will prove whether a video is
-            // truly stuck (load never ends) vs. just slow (load ends, eventually).
-            override fun onIsLoadingChanged(isLoading: Boolean) {
-                if (isLoading) {
-                    loadStartedAtMs = System.currentTimeMillis()
-                    Log.d(TAG, "onIsLoadingChanged: LOAD START url=$videoUrl")
-                } else {
-                    val elapsed = if (loadStartedAtMs > 0) System.currentTimeMillis() - loadStartedAtMs else -1
-                    Log.d(TAG, "onIsLoadingChanged: LOAD END elapsedMs=$elapsed")
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
-    // Stall watchdog: while ExoPlayer reports BUFFERING, log bufferedPosition every
-    // 5s. If bufferedPosition is NOT increasing between consecutive log lines, the
-    // load really is stuck (network layer isn't delivering bytes at all - check the
-    // MF_Download-tagged Cloudflare Worker / OkHttp logs). If it IS slowly increasing,
-    // it's just a slow connection, not a hang - the UI is just misleading.
-    LaunchedEffect(playerState) {
-        if (playerState != Player.STATE_BUFFERING) return@LaunchedEffect
-        var lastBuffered = -1L
-        while (true) {
-            delay(5000)
-            val buffered = exoPlayer.bufferedPosition
-            val moving = buffered != lastBuffered
-            Log.w(
-                TAG,
-                "STALL WATCHDOG: still BUFFERING, bufferedPosition=${buffered}ms " +
-                        "(${if (moving) "advancing" else "NOT MOVING -- genuinely stuck"})"
+        // 3. Root FrameLayout to hold both WebView and UI controls
+        val rootLayout = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
             )
-            lastBuffered = buffered
+            setBackgroundColor(Color.BLACK)
         }
-    }
 
-    // Auto-hide top overlay controls timer
-    LaunchedEffect(showOverlayControls) {
-        if (showOverlayControls) {
-            delay(4000)
-            showOverlayControls = false
+        // 4. Initialize WebView
+        webView = WebView(this).apply {
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            setBackgroundColor(Color.BLACK)
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                mediaPlaybackRequiresUserGesture = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+
+                // --- AD BLOCKING SETTINGS ---
+                setSupportMultipleWindows(false)
+                javaScriptCanOpenWindowsAutomatically = false
+            }
+
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage?): Boolean {
+                    Log.d("PlayerActivity", "JS: ${consoleMessage?.message()}")
+                    return true
+                }
+            }
+
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                    val url = request?.url?.toString() ?: return false
+
+                    // ALLOWED DOMAINS: Only allow the embed player and recognized media CDN domains
+                    val allowedDomains = listOf("vidsrc", "vidplay", "mcloud", "megacloud", "cloudstream")
+                    val isAllowed = allowedDomains.any { domain -> url.contains(domain, ignoreCase = true) }
+
+                    if (!isAllowed) {
+                        Log.d("PlayerActivity", "🛡️ Blocked Ad Redirect: $url")
+                        return true // Intercept & block external ad redirects
+                    }
+
+                    return false // Allow legitimate stream requests
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    Log.d("PlayerActivity", "✅ Page Finished: $url")
+                }
+            }
         }
-    }
 
-    // Handle Orientation Changes
-    LaunchedEffect(isFullScreenAspect) {
-        if (isFullScreenAspect) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        rootLayout.addView(webView)
+
+        // 5. Floating Back Button (Top-Left Overlay)
+        val density = resources.displayMetrics.density
+        val buttonSize = (42 * density).toInt()
+        val margin = (16 * density).toInt()
+
+        val backButton = ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setColorFilter(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#80000000")) // Semi-transparent black circle/box
+
+            layoutParams = FrameLayout.LayoutParams(buttonSize, buttonSize).apply {
+                gravity = Gravity.TOP or Gravity.START
+                topMargin = margin
+                leftMargin = margin
+            }
+
+            setOnClickListener {
+                finish() // Closes PlayerActivity cleanly and returns to the app
+            }
+        }
+
+        rootLayout.addView(backButton)
+        setContentView(rootLayout)
+
+        // 6. Load Video Stream URL
+        val videoUrl = intent.getStringExtra("EXTRA_VIDEO_URL")
+        if (!videoUrl.isNullOrEmpty()) {
+            Log.d("PlayerActivity", "🚀 Loading URL: $videoUrl")
+            webView.loadUrl(videoUrl)
         } else {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            finish()
         }
     }
 
-    // Toggle subtitles
-    fun toggleSubtitles(enable: Boolean, track: SubtitleTrackInfo? = null) {
-        val parameters = exoPlayer.trackSelectionParameters.buildUpon()
-        if (!enable) {
-            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            subtitlesEnabled = false
-            selectedSubtitleTrack = null
-        } else {
-            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            if (track != null) {
-                val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
-                parameters.setOverrideForType(
-                    TrackSelectionOverride(trackGroup, track.trackIndex)
-                )
-                selectedSubtitleTrack = track
-            } else {
-                parameters.clearOverridesOfType(C.TRACK_TYPE_TEXT)
-            }
-            subtitlesEnabled = true
-        }
-        exoPlayer.trackSelectionParameters = parameters.build()
-    }
-
-    // Switch audio track
-    fun selectAudioTrack(track: AudioTrackInfo) {
-        val trackGroup = exoPlayer.currentTracks.groups[track.groupIndex].mediaTrackGroup
-        val parameters = exoPlayer.trackSelectionParameters
-            .buildUpon()
-            .setOverrideForType(TrackSelectionOverride(trackGroup, track.trackIndex))
-            .build()
-        exoPlayer.trackSelectionParameters = parameters
-        selectedAudioTrack = track
-    }
-
-    // Retry playback from scratch after an error
-    fun retryPlayback() {
-        playbackError = null
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Black)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                showOverlayControls = !showOverlayControls
-            }
-    ) {
-        // Native ExoPlayer View
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = true
-                    setShowNextButton(false)
-                    setShowPreviousButton(false)
-                    setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    resizeMode = currentResizeMode
-                    controllerShowTimeoutMs = 3000
-                    keepScreenOn = true
-                    setOnClickListener {
-                        showOverlayControls = !showOverlayControls
-                    }
-                }
-            },
-            update = { playerView ->
-                // Called on every recomposition where currentResizeMode is a read key;
-                // this is what actually lets the user change aspect ratio live.
-                if (playerView.resizeMode != currentResizeMode) {
-                    playerView.resizeMode = currentResizeMode
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Custom Top Overlay Bar
-        AnimatedVisibility(
-            visible = showOverlayControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Black.copy(alpha = 0.85f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        IconButton(
-                            onClick = onBack,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.width(12.dp))
-
-                        Text(
-                            text = title,
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Aspect Ratio / Resize Mode Selector
-                        IconButton(
-                            onClick = { showAspectRatioDialog = true },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.AspectRatio,
-                                contentDescription = "Aspect Ratio",
-                                tint = if (currentResizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) Gold else TextPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.width(8.dp))
-
-                        // Audio Track Selector
-                        if (availableAudioTracks.size > 1) {
-                            IconButton(
-                                onClick = { showAudioDialog = true },
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Audiotrack,
-                                    contentDescription = "Audio Language",
-                                    tint = Gold,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(Modifier.width(8.dp))
-                        }
-
-                        // Subtitles Toggle Button
-                        if (availableSubtitles.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    if (availableSubtitles.size > 1) {
-                                        showSubtitleDialog = true
-                                    } else {
-                                        toggleSubtitles(!subtitlesEnabled)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = if (subtitlesEnabled) {
-                                        Icons.Filled.ClosedCaption
-                                    } else {
-                                        Icons.Filled.ClosedCaptionOff
-                                    },
-                                    contentDescription = "Subtitles",
-                                    tint = if (subtitlesEnabled) Gold else TextPrimary,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-
-                            Spacer(Modifier.width(8.dp))
-                        }
-
-                        // Screen Aspect Ratio Toggle Button (fullscreen/portrait orientation, unrelated to resizeMode)
-                        IconButton(
-                            onClick = { isFullScreenAspect = !isFullScreenAspect },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(DarkSurface.copy(alpha = 0.7f), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = if (isFullScreenAspect) {
-                                    Icons.Filled.FullscreenExit
-                                } else {
-                                    Icons.Filled.Fullscreen
-                                },
-                                contentDescription = "Toggle Landscape Mode",
-                                tint = TextPrimary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Playback Error Overlay -- shows what actually went wrong instead of
-        // silently stopping, plus a Retry button.
-        playbackError?.let { error ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Black.copy(alpha = 0.92f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier.padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Playback Error",
-                        color = TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = getPlaybackErrorMessage(error),
-                        color = TextPrimary.copy(alpha = 0.85f),
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "Error code: ${error.errorCode} (${error.errorCodeName})",
-                        color = TextPrimary.copy(alpha = 0.5f),
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    error.cause?.message?.let { causeMessage ->
-                        if (BuildConfig.DEBUG) {
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = causeMessage,
-                                color = TextPrimary.copy(alpha = 0.4f),
-                                fontSize = 10.sp,
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(20.dp))
-                    Row {
-                        Button(
-                            onClick = { retryPlayback() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Gold)
-                        ) {
-                            Text("Retry", color = Black)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        OutlinedButton(onClick = onBack) {
-                            Text("Go Back", color = TextPrimary)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Audio Track Selection Dialog
-        if (showAudioDialog) {
-            Dialog(onDismissRequest = { showAudioDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = "Audio Language",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        availableAudioTracks.forEachIndexed { index, track ->
-                            if (index > 0) {
-                                HorizontalDivider(color = DarkElevated)
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectAudioTrack(track)
-                                        showAudioDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = selectedAudioTrack == track || (selectedAudioTrack == null && index == 0),
-                                    onClick = {
-                                        selectAudioTrack(track)
-                                        showAudioDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(track.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Subtitle Selection Dialog
-        if (showSubtitleDialog) {
-            Dialog(onDismissRequest = { showSubtitleDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = "Subtitle Language",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    toggleSubtitles(false)
-                                    showSubtitleDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = !subtitlesEnabled,
-                                onClick = {
-                                    toggleSubtitles(false)
-                                    showSubtitleDialog = false
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Off", color = TextPrimary, fontSize = 14.sp)
-                        }
-
-                        HorizontalDivider(color = DarkElevated)
-
-                        availableSubtitles.forEach { track ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        toggleSubtitles(true, track)
-                                        showSubtitleDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = subtitlesEnabled && (selectedSubtitleTrack == track || selectedSubtitleTrack == null && track == availableSubtitles.firstOrNull()),
-                                    onClick = {
-                                        toggleSubtitles(true, track)
-                                        showSubtitleDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(track.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
-
-                    }
-                }
-            }
-        }
-
-        // Aspect Ratio / Resize Mode Selection Dialog
-        if (showAspectRatioDialog) {
-            Dialog(onDismissRequest = { showAspectRatioDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = "Video Fit",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        resizeModeOptions.forEachIndexed { index, option ->
-                            if (index > 0) {
-                                HorizontalDivider(color = DarkElevated)
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        currentResizeMode = option.mode
-                                        showAspectRatioDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = currentResizeMode == option.mode,
-                                    onClick = {
-                                        currentResizeMode = option.mode
-                                        showAspectRatioDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(option.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    override fun onDestroy() {
+        webView.stopLoading()
+        webView.loadUrl("about:blank")
+        webView.clearHistory()
+        webView.removeAllViews()
+        webView.destroy()
+        super.onDestroy()
     }
 }
