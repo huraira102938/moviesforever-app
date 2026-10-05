@@ -403,6 +403,10 @@ async function handleRedeem(request) {
   const id = (body.id || "").trim();
   const username = (body.username || "").trim();
 
+  if (id.length > 100 || username.length > 100) {
+    return jsonResponse(200, { success: false, message: "This code is invalid." });
+  }
+
   if (!id || !username) {
     return jsonResponse(400, {
       success: false,
@@ -413,9 +417,7 @@ async function handleRedeem(request) {
   let doc;
   try {
     doc = await getDocument("codes", id);
-    console.error("DEBUG redeem doc", id, JSON.stringify(doc));
   } catch (e) {
-    console.error("DEBUG redeem getDocument error", id, String(e));
     return jsonResponse(200, { success: false, message: "This code is invalid." });
   }
   if (!doc || !doc.fields) {
@@ -433,15 +435,21 @@ async function handleRedeem(request) {
     });
   }
 
-  // Atomically burn the code
+  // Atomically burn the code. The write only succeeds if the doc has not changed since we
+  // read it (updateTime precondition), so two simultaneous requests can never both redeem it.
   try {
-    await updateDocument(
-      "codes",
-      id,
-      ["status", "usedAt"],
-      { status: "used", usedAt: new Date().toISOString() }
+    await firestoreRequest(
+      "PATCH",
+      `codes/${encodeURIComponent(id)}` +
+        `?updateMask.fieldPaths=status&updateMask.fieldPaths=usedAt` +
+        `&currentDocument.updateTime=${encodeURIComponent(doc.updateTime)}`,
+      { fields: objectToFields({ status: "used", usedAt: new Date().toISOString() }) }
     );
   } catch (e) {
+    const msg = String(e && e.message ? e.message : e);
+    if (msg.includes("FAILED_PRECONDITION") || msg.includes("-> 409") || msg.includes("-> 400")) {
+      return jsonResponse(200, { success: false, message: "This code is already used." });
+    }
     return jsonResponse(500, { success: false, message: "Server error. Please try again." });
   }
 
