@@ -2,6 +2,10 @@ name = "moviesforever"
 main = "src/index.js"
 compatibility_date = "2024-09-23"
 
+# Delivers queued push notifications. Free on Cloudflare; ~1,440 tiny runs/day.
+[triggers]
+crons = ["* * * * *"]
+
 [observability]
 enabled = true
 
