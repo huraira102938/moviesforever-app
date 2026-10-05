@@ -27,18 +27,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * TEST FEATURE: downloads the 8 category JSON files from Cloudflare, caches them in the app's
- * private storage, and exposes them as Movie lists per category.
+ * Downloads the 8 category JSON files from Cloudflare, caches them in the app's private storage,
+ * and exposes them as Movie lists per category.
  *
- * Session behaviour (one "session" = one app process, i.e. from open until the app is closed):
+ * When does the app download?
+ *  - Each saved file remembers the server's ETag. On every app launch the app asks the server
+ *    "has this file changed?" (If-None-Match). Unchanged -> tiny 304 answer, nothing downloaded,
+ *    the saved copy is used. Changed (a new JSON was uploaded from the admin panel) -> the new
+ *    file is downloaded, saved, and shown straight away.
+ *  - First launch / no saved copy -> the file is downloaded.
+ *  - No internet / slow / bad JSON -> the saved copy is used (or an empty shelf). Never crashes.
+ *
+ * Session behaviour (one "session" = one app process, from open until the app is closed):
  *  - every category is shuffled ONCE per session with [sessionSeed]
- *  - each category is published ONCE per session (write-once). Going to Search / Detail and
- *    back, re-creating ViewModels, or a late/retried download never re-orders or swaps a shelf
- *  - a fresh download is still saved to disk, so the NEXT app launch gets the new data
- *    (and a new random order)
- *  - no internet / bad JSON -> keeps the cached copy (or an empty shelf). Never crashes.
- *
- * Nothing is persisted in memory beyond the process, so closing the app resets everything.
+ *  - each category is published ONCE per session (write-once), so going to Search / Detail and
+ *    back never re-orders or swaps a shelf
+ *  - closing the app and opening it again gives a new random order
  */
 @Singleton
 class TmdbRepository @Inject constructor(
@@ -48,6 +52,8 @@ class TmdbRepository @Inject constructor(
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+    /** Used when a saved copy exists: the "did it change?" check must never hold Home for long. */
+    private val quickClient = client.newBuilder().callTimeout(6, TimeUnit.SECONDS).build()
     private val gson = Gson()
 
     private val _shelves = MutableStateFlow<Map<TmdbCategory, List<Movie>>>(emptyMap())
@@ -58,27 +64,33 @@ class TmdbRepository @Inject constructor(
     /** New value every time the app process starts -> new random order on every app launch. */
     private val sessionSeed: Long = System.nanoTime()
 
+    private sealed class Fetch {
+        class Fresh(val movies: List<Movie>) : Fetch()
+        object NotModified : Fetch()
+        object Failed : Fetch()
+    }
+
     suspend fun load() {
         if (!started.compareAndSet(false, true)) return
-        var anyFailed = false
+        val anyFailed = AtomicBoolean(false)
         withContext(Dispatchers.IO) {
-            // 1) cached data first (instant)
-            TmdbCategory.values().forEach { cat ->
-                readCache(cat)?.let { publishOnce(cat, it) }
-            }
-            // 2) refresh all files in parallel. The download is always saved to disk (for the
-            //    next launch), but it only reaches the screen if this category has nothing yet
-            //    (first ever launch / no cache) -- otherwise the shelf would change mid-session.
             coroutineScope {
                 TmdbCategory.values().map { cat ->
                     async {
-                        val fresh = try { download(cat) } catch (e: Exception) { null }
-                        if (fresh != null) publishOnce(cat, fresh) else anyFailed = true
+                        val cached = readCache(cat)
+                        // With a saved copy: ask the server if the file changed (fast 304 when not).
+                        // Without one: download it.
+                        val result = fetch(cat, if (cached != null) quickClient else client, cached != null)
+                        when {
+                            result is Fetch.Fresh -> publishOnce(cat, result.movies)
+                            cached != null -> publishOnce(cat, cached)
+                            else -> anyFailed.set(true)
+                        }
                     }
                 }.awaitAll()
             }
         }
-        if (anyFailed) started.set(false) // allow a retry next time the home screen opens
+        if (anyFailed.get()) started.set(false) // allow a retry next time the home screen opens
     }
 
     /**
@@ -90,17 +102,28 @@ class TmdbRepository @Inject constructor(
         _shelves.update { current -> if (cat in current) current else current + (cat to shuffled) }
     }
 
-    private fun download(cat: TmdbCategory): List<Movie>? {
-        val request = Request.Builder()
+    /**
+     * Asks the server for the file. If [haveValidCache] is true the saved ETag is sent, so the
+     * server answers 304 (nothing to download) unless a new JSON was uploaded.
+     */
+    private fun fetch(cat: TmdbCategory, http: OkHttpClient, haveValidCache: Boolean): Fetch {
+        val builder = Request.Builder()
             .url(TmdbConfig.BASE_URL + cat.fileName)
             .header("Cache-Control", "no-cache")
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val text = response.body?.string() ?: return null
-            val movies = parse(text, cat) ?: return null
-            writeCache(cat, text)
-            return movies
+        if (haveValidCache) readEtag(cat)?.let { builder.header("If-None-Match", it) }
+
+        return try {
+            http.newCall(builder.build()).execute().use { response ->
+                if (response.code == 304) return@use Fetch.NotModified
+                if (!response.isSuccessful) return@use Fetch.Failed
+                val text = response.body?.string() ?: return@use Fetch.Failed
+                val movies = parse(text, cat) ?: return@use Fetch.Failed
+                // Save the file first; only remember its ETag if the file was really saved.
+                writeEtag(cat, if (writeCache(cat, text)) response.header("ETag") else null)
+                Fetch.Fresh(movies)
+            }
+        } catch (e: Exception) {
+            Fetch.Failed
         }
     }
 
@@ -126,12 +149,35 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    private fun writeCache(cat: TmdbCategory, text: String) {
-        try {
+    /** @return true if the file was saved. */
+    private fun writeCache(cat: TmdbCategory, text: String): Boolean {
+        return try {
             val f = cacheFile(cat)
             val tmp = File(f.parentFile, cat.fileName + ".tmp")
             tmp.writeText(text)
             tmp.renameTo(f)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun etagFile(cat: TmdbCategory): File =
+        File(File(context.filesDir, "tmdb_cache").apply { mkdirs() }, cat.fileName + ".etag")
+
+    private fun readEtag(cat: TmdbCategory): String? {
+        return try {
+            val f = etagFile(cat)
+            if (f.exists()) f.readText().trim().ifEmpty { null } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** null (or blank) removes the saved ETag, so the next launch simply downloads again. */
+    private fun writeEtag(cat: TmdbCategory, etag: String?) {
+        try {
+            val f = etagFile(cat)
+            if (etag.isNullOrBlank()) f.delete() else f.writeText(etag)
         } catch (_: Exception) {
         }
     }
