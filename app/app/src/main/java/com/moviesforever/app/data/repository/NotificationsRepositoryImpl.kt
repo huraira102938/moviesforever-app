@@ -1,6 +1,7 @@
 package com.moviesforever.app.data.repository
 
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.moviesforever.app.data.model.AppNotification
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -15,9 +16,13 @@ class NotificationsRepositoryImpl @Inject constructor(
 
     private val collection = firestore.collection("notifications")
 
-    // Live listener -- see MoviesRepositoryImpl for why.
+    // Only the newest 30 are read, so launch cost stays flat however many notifications the
+    // admin has sent over time (it used to re-read every notification ever sent).
     override fun observeNotifications(): Flow<List<AppNotification>> = callbackFlow {
-        val registration = collection.addSnapshotListener { snapshot, error ->
+        val registration = collection
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(NOTIFICATION_LIMIT)
+            .addSnapshotListener { snapshot, error ->
             if (error != null || snapshot == null) {
                 trySend(emptyList())
                 return@addSnapshotListener
@@ -38,3 +43,5 @@ class NotificationsRepositoryImpl @Inject constructor(
         awaitClose { registration.remove() }
     }
 }
+
+private const val NOTIFICATION_LIMIT = 30L

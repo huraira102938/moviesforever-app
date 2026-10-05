@@ -45,8 +45,6 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(
     banners: List<Banner>,
-    movies: List<Movie>,
-    trendingMovies: List<Movie>,
     pricing: PricingSettings,
     isUnlocked: Boolean,
     onBannerClick: (Banner) -> Unit,

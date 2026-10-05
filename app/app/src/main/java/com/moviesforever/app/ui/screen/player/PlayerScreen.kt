@@ -57,6 +57,9 @@ class PlayerActivity : Activity() {
                 domStorageEnabled = true
                 databaseEnabled = true
                 mediaPlaybackRequiresUserGesture = false
+                // The page never needs the phone's files; keep embedded pages away from them.
+                allowFileAccess = false
+                allowContentAccess = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
 
@@ -76,11 +79,17 @@ class PlayerActivity : Activity() {
 
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url?.toString() ?: return false
+                    val uri = request?.url ?: return true
+                    val url = uri.toString()
 
-                    // ALLOWED DOMAINS: Only allow the embed player and recognized media CDN domains
+                    // ALLOWED DOMAINS: only http(s) links whose HOST is the embed player or a
+                    // recognized media CDN. (Matching the whole URL let any site pass by putting
+                    // "vidsrc" in its path or query string.) Other schemes, such as intent://, are blocked.
                     val allowedDomains = listOf("vidsrc", "vidplay", "mcloud", "megacloud", "cloudstream")
-                    val isAllowed = allowedDomains.any { domain -> url.contains(domain, ignoreCase = true) }
+                    val scheme = uri.scheme?.lowercase()
+                    val host = uri.host?.lowercase().orEmpty()
+                    val isAllowed = (scheme == "https" || scheme == "http") &&
+                        allowedDomains.any { domain -> host.contains(domain) }
 
                     if (!isAllowed) {
                         Log.d("PlayerActivity", "🛡️ Blocked Ad Redirect: $url")
@@ -124,7 +133,7 @@ class PlayerActivity : Activity() {
 
         // 6. Load Video Stream URL
         val videoUrl = intent.getStringExtra("EXTRA_VIDEO_URL")
-        if (!videoUrl.isNullOrEmpty()) {
+        if (!videoUrl.isNullOrEmpty() && (videoUrl.startsWith("https://") || videoUrl.startsWith("http://"))) {
             Log.d("PlayerActivity", "🚀 Loading URL: $videoUrl")
             webView.loadUrl(videoUrl)
         } else {

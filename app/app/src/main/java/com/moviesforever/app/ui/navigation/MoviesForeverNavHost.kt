@@ -240,7 +240,7 @@ fun MoviesForeverNavHost(
             ) { backStackEntry ->
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
                 val tmdbViewModel: TmdbViewModel = hiltViewModel()
-                val movie = uiState.movies.find { it.id == movieId } ?: tmdbViewModel.findMovie(movieId)
+                val movie = tmdbViewModel.findMovie(movieId)
                 if (movie == null) {
                     navController.popBackStack()
                 } else {
@@ -301,7 +301,7 @@ fun MoviesForeverNavHost(
                 val isTrailer = backStackEntry.arguments?.getBoolean("trailer") == true
 
                 val tmdbViewModel: TmdbViewModel = hiltViewModel()
-                val movie = uiState.movies.find { it.id == movieId } ?: tmdbViewModel.findMovie(movieId)
+                val movie = tmdbViewModel.findMovie(movieId)
 
                 if (movie == null) {
                     navController.popBackStack()
@@ -393,8 +393,6 @@ private fun MainScaffoldWithTabs(
             when (currentTab) {
                 0 -> HomeScreen(
                     banners = uiState.banners,
-                    movies = uiState.movies,
-                    trendingMovies = uiState.trendingMovies,
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->

@@ -13,7 +13,6 @@ import com.moviesforever.app.data.model.AppNotification
 import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.data.model.ReferralEarnings
-import com.moviesforever.app.data.model.TrendingItem
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.repository.AccountRepository
@@ -26,12 +25,10 @@ import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.InstallRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
-import com.moviesforever.app.data.repository.MoviesRepository
 import com.moviesforever.app.data.repository.NotificationsRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.ReferralEarningsRepository
-import com.moviesforever.app.data.repository.TrendingRepository
 import com.moviesforever.app.data.repository.UnlockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.moviesforever.app.push.PushTopicManager
@@ -56,11 +53,9 @@ data class AppUiState(
     val pricing: PricingSettings = PricingSettings(),
     val paymentDetails: PaymentDetails = PaymentDetails(),
     val contactDetails: ContactDetails = ContactDetails(),
-    val movies: List<Movie> = emptyList(),
     val categories: List<Category> = emptyList(),
     val genres: List<Genre> = emptyList(),
     val banners: List<Banner> = emptyList(),
-    val trendingItems: List<TrendingItem> = emptyList(),
     val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
     val downloadedMovieInfo: Map<String, Movie> = emptyMap(),
     val wifiOnlyDownloads: Boolean = true,
@@ -101,15 +96,6 @@ data class AppUiState(
         .filter { it.value is MovieDownloadStatus.Downloading }
         .mapNotNull { downloadedMovieInfo[it.key] }
 
-    /**
-     * Resolves the admin's curated `trending` collection (movieId + order)
-     * against the live movies list, in the exact order set from the admin
-     * panel's "Trending" page. Paused or since-deleted movies drop out.
-     */
-    val trendingMovies: List<Movie> get() = trendingItems
-        .sortedBy { it.order }
-        .mapNotNull { item -> movies.find { it.id == item.movieId } }
-        .filter { !it.paused }
 }
 
 sealed class UnlockCheckState {
@@ -132,7 +118,6 @@ sealed class InstallCheckState {
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    moviesRepository: MoviesRepository,
     categoriesRepository: CategoriesRepository,
     genresRepository: GenresRepository,
     bannersRepository: BannersRepository,
@@ -143,7 +128,6 @@ class AppViewModel @Inject constructor(
     accountRepository: AccountRepository,
     referralEarningsRepository: ReferralEarningsRepository,
     appShareRepository: AppShareRepository,
-    trendingRepository: TrendingRepository,
     notificationsRepository: NotificationsRepository,
     private val installRepository: InstallRepository,
     private val downloadRepository: DownloadRepository,
@@ -169,21 +153,19 @@ class AppViewModel @Inject constructor(
         )
 
     private data class ContentData(
-        val movies: List<Movie>,
         val categories: List<Category>,
         val genres: List<Genre>,
-        val banners: List<Banner>,
-        val trendingItems: List<TrendingItem>
+        val banners: List<Banner>
     )
 
+    // Movies are NOT read from Firestore on this branch: the whole catalogue comes from the
+    // TMDB JSON files (TmdbRepository). Only these three small collections are listened to.
     private val contentDataState: StateFlow<ContentData> = combine(
-        moviesRepository.observeMovies(),
         categoriesRepository.observeCategories(),
         genresRepository.observeGenres(),
-        bannersRepository.observeBanners(),
-        trendingRepository.observeTrendingItems()
-    ) { movies, categories, genres, banners, trendingItems ->
-        ContentData(movies, categories, genres, banners, trendingItems)
+        bannersRepository.observeBanners()
+    ) { categories, genres, banners ->
+        ContentData(categories, genres, banners)
     }.stateIn(
         scope = viewModelScope,
         // Eagerly (not WhileSubscribed): these are real Firestore listeners
@@ -193,7 +175,7 @@ class AppViewModel @Inject constructor(
         // navigation would otherwise silently repeat that cost. Eagerly
         // keeps this attached once for the whole app session instead.
         started = SharingStarted.Eagerly,
-        initialValue = ContentData(emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+        initialValue = ContentData(emptyList(), emptyList(), emptyList())
     )
 
     private val pricingState: StateFlow<PricingSettings> = pricingRepository.observePricing()
@@ -328,11 +310,9 @@ class AppViewModel @Inject constructor(
             pricing = pricing,
             paymentDetails = paymentDetails,
             contactDetails = contactDetails,
-            movies = content.movies,
             categories = content.categories,
             genres = content.genres,
             banners = content.banners,
-            trendingItems = content.trendingItems,
             downloadStatuses = downloadStatuses,
             downloadedMovieInfo = downloadedMovieInfo,
             wifiOnlyDownloads = wifiOnly,
