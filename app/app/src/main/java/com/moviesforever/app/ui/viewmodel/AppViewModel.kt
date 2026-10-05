@@ -34,9 +34,14 @@ import com.moviesforever.app.data.repository.ReferralEarningsRepository
 import com.moviesforever.app.data.repository.TrendingRepository
 import com.moviesforever.app.data.repository.UnlockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.moviesforever.app.push.PushTopicManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -81,8 +86,8 @@ data class AppUiState(
             else -> "free"
         }
 
-    /** Notifications relevant to this user, newest first. Purely a read-only
-     * in-app feed -- there is no push/system notification sent for these. */
+    /** Notifications relevant to this user, newest first. This is the in-app feed;
+     * the same messages are also pushed via FCM topics (see PushTopicManager). */
     val myNotifications: List<AppNotification>
         get() = notifications
             .filter { myNotificationTarget in it.targets }
@@ -141,7 +146,8 @@ class AppViewModel @Inject constructor(
     trendingRepository: TrendingRepository,
     notificationsRepository: NotificationsRepository,
     private val installRepository: InstallRepository,
-    private val downloadRepository: DownloadRepository
+    private val downloadRepository: DownloadRepository,
+    private val pushTopicManager: PushTopicManager
 ) : ViewModel() {
 
     private val unlockRepositoryRef = unlockRepository
@@ -356,6 +362,22 @@ class AppViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = AppUiState()
     )
+
+    init {
+        // Keep this device subscribed to the push topic for its current group
+        // (free / paid / paused). Waits for the unlock check to finish and lets the
+        // account (paused flag) settle for a moment so we don't flip topics needlessly.
+        viewModelScope.launch {
+            uiState
+                .map { if (it.loading) null else it.myNotificationTarget }
+                .filterNotNull()
+                .distinctUntilChanged()
+                .collectLatest { target ->
+                    delay(1500)
+                    pushTopicManager.sync(target)
+                }
+        }
+    }
 
     fun markCelebrationShown() {
         viewModelScope.launch {

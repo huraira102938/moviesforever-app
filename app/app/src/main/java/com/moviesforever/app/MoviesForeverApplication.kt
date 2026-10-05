@@ -7,6 +7,7 @@ import androidx.media3.exoplayer.offline.DownloadService
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.moviesforever.app.download.MoviesForeverDownloadService
+import com.moviesforever.app.push.PushNotifier
 import dagger.hilt.android.HiltAndroidApp
 
 private const val TAG = "MF_Download"
@@ -17,6 +18,8 @@ class MoviesForeverApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initializeFirebase()
+        // Channel must exist before a background push arrives, or Android uses a generic one.
+        PushNotifier.ensureChannel(this)
 
         // THE MISSING FIX: nothing else in this app ever calls DownloadService.start().
         // Without this, a killed/stalled download only resumes whenever the OS randomly

@@ -11,6 +11,10 @@
  *   POST /signed-url  { movieId }       -> return public streaming URL for a movie
  *   GET  /health      -> "ok"
  *
+ * Scheduled (cron, every minute -- see wrangler.toml):
+ *   Sends push notifications for any `notifications` doc with pushStatus == "pending"
+ *   (written by the admin panel) through FCM topics, then marks it "sent".
+ *
  * Uses Firebase Firestore REST API with a service-account JWT signed via WebCrypto.
  *
  * Required Worker secrets:
@@ -67,7 +71,7 @@ async function getAccessToken() {
   const header = { alg: "RS256", typ: "JWT" };
   const claim = {
     iss: sa.client_email,
-    scope: "https://www.googleapis.com/auth/datastore",
+    scope: "https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging",
     aud: TOKEN_URL,
     iat,
     exp,
@@ -505,6 +509,140 @@ async function handleSignedUrl(request) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Push notifications (FCM)
+// ---------------------------------------------------------------------------
+
+// Devices subscribe to exactly one of these topics (see PushTopics.kt in the app).
+const TOPIC_PREFIX = "mf_";
+const VALID_TARGETS = ["free", "paid", "paused"];
+const PUSH_CHANNEL_ID = "moviesforever_push"; // must match PushNotifier.CHANNEL_ID
+const PUSH_MAX_AGE_MS = 6 * 60 * 60 * 1000;   // don't blast a stale notification late
+const PUSH_MAX_ATTEMPTS = 3;
+const PUSH_BATCH = 5;                          // docs per cron run (keeps us under subrequest limits)
+
+function pushTarget(targets) {
+  const valid = VALID_TARGETS.filter((t) => (targets || []).includes(t));
+  if (valid.length === 0) return null;
+  // One topic -> `topic`. Several -> a condition, so ONE request reaches all groups.
+  if (valid.length === 1) return { topic: TOPIC_PREFIX + valid[0] };
+  return {
+    condition: valid.map((t) => `'${TOPIC_PREFIX}${t}' in topics`).join(" || "),
+  };
+}
+
+async function sendFcm(notificationId, text, targets) {
+  const target = pushTarget(targets);
+  if (!target) return { ok: false, retry: false, error: "no valid targets" };
+
+  const body = text.length > 200 ? text.slice(0, 197) + "..." : text;
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/messages:send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          ...target,
+          notification: { title: "MoviesForever", body },
+          data: { notificationId: String(notificationId) },
+          android: {
+            priority: "HIGH",
+            ttl: "86400s", // drop it if a device is offline for more than a day
+            notification: { channel_id: PUSH_CHANNEL_ID },
+          },
+        },
+      }),
+    }
+  );
+  const resText = await res.text();
+  if (res.ok) {
+    let name = "";
+    try { name = JSON.parse(resText).name || ""; } catch (_) {}
+    return { ok: true, name };
+  }
+  return {
+    ok: false,
+    retry: res.status === 429 || res.status >= 500,
+    error: `FCM ${res.status}: ${resText}`.slice(0, 500),
+  };
+}
+
+async function processPendingNotifications() {
+  const rows = await firestoreQuery({
+    structuredQuery: {
+      from: [{ collectionId: "notifications" }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "pushStatus" },
+          op: "EQUAL",
+          value: { stringValue: "pending" },
+        },
+      },
+      limit: PUSH_BATCH,
+    },
+  });
+
+  for (const row of rows || []) {
+    if (!row.document) continue;
+    const docId = documentIdFromName(row.document.name);
+    const n = fieldsToObject(row.document.fields);
+
+    // Too old (e.g. the cron was down for hours): skip the push, the in-app feed still has it.
+    const age = Date.now() - new Date(n.createdAt || 0).getTime();
+    if (age > PUSH_MAX_AGE_MS) {
+      await updateDocument("notifications", docId, ["pushStatus"], { pushStatus: "expired" });
+      continue;
+    }
+
+    // Claim the doc so two overlapping runs can never send the same notification twice.
+    try {
+      await firestoreRequest(
+        "PATCH",
+        `notifications/${encodeURIComponent(docId)}` +
+          `?updateMask.fieldPaths=pushStatus` +
+          `&currentDocument.updateTime=${encodeURIComponent(row.document.updateTime)}`,
+        { fields: objectToFields({ pushStatus: "sending" }) }
+      );
+    } catch (_) {
+      continue; // someone else got it
+    }
+
+    const attempts = (n.pushAttempts || 0) + 1;
+    try {
+      const r = await sendFcm(docId, String(n.text || ""), n.targets);
+      if (r.ok) {
+        await updateDocument(
+          "notifications", docId,
+          ["pushStatus", "pushedAt", "pushMessageName", "pushAttempts"],
+          { pushStatus: "sent", pushedAt: new Date().toISOString(), pushMessageName: r.name, pushAttempts: attempts }
+        );
+      } else {
+        const giveUp = !r.retry || attempts >= PUSH_MAX_ATTEMPTS;
+        await updateDocument(
+          "notifications", docId,
+          ["pushStatus", "pushError", "pushAttempts"],
+          { pushStatus: giveUp ? "failed" : "pending", pushError: r.error, pushAttempts: attempts }
+        );
+      }
+    } catch (e) {
+      await updateDocument(
+        "notifications", docId,
+        ["pushStatus", "pushError", "pushAttempts"],
+        {
+          pushStatus: attempts >= PUSH_MAX_ATTEMPTS ? "failed" : "pending",
+          pushError: String(e.message || e).slice(0, 500),
+          pushAttempts: attempts,
+        }
+      ).catch(() => {});
+    }
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     // Expose secrets to global constants for simpler code in this file.
@@ -571,5 +709,16 @@ export default {
     }
 
     return jsonResponse(404, { success: false, message: "Not found." });
+  },
+
+  // Cron trigger (every minute): deliver any notifications the admin has queued.
+  async scheduled(event, env, ctx) {
+    globalThis.FIREBASE_PROJECT_ID = env.FIREBASE_PROJECT_ID;
+    globalThis.FIREBASE_SERVICE_ACCOUNT = env.FIREBASE_SERVICE_ACCOUNT;
+    ctx.waitUntil(
+      processPendingNotifications().catch((e) =>
+        console.error("push cron failed", String(e && e.message ? e.message : e))
+      )
+    );
   },
 };
