@@ -24,43 +24,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.data.model.Genre
 import com.moviesforever.app.data.model.Movie
-import com.moviesforever.app.data.model.TMDB_ID_PREFIX
 import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.theme.*
 
 @Composable
 fun SearchScreen(
     movies: List<Movie>,
+    /** Categories that exist in movies.json (id = Firestore category id), in the admin's order. */
+    categories: List<Category>,
     genres: List<Genre>, // Kept in signature for NavHost compatibility, but unused
     onMovieClick: (Movie) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    // Holds a category id ("" = All).
     var selectedCategory by rememberSaveable { mutableStateOf("") }
 
-    // Filter exclusively for TMDB items (Cloudflare R2 storage excluded)
-    val tmdbOnlyMovies = remember(movies) {
-        movies.filter { it.id.startsWith(TMDB_ID_PREFIX) }
-    }
-
-    val filtered = remember(tmdbOnlyMovies, query, selectedCategory) {
-        tmdbOnlyMovies.filter { m ->
+    val filtered = remember(movies, query, selectedCategory) {
+        movies.filter { m ->
             val matchQuery = query.isBlank() || m.title.contains(query, ignoreCase = true)
-
-            // Robust category matching for string variations
-            val matchCat = selectedCategory.isBlank() || when (selectedCategory.lowercase()) {
-                "south" -> m.category.contains("south", ignoreCase = true) || m.genres.any { it.contains("south", ignoreCase = true) }
-                else -> m.category.equals(selectedCategory, ignoreCase = true)
-            }
-
+            val matchCat = selectedCategory.isBlank() || m.category == selectedCategory
             matchQuery && matchCat && !m.paused
         }
     }
 
     val randomizedResults = filtered
-
-    val visibleCategories = listOf("Bollywood", "Hollywood", "South", "Punjabi", "Animation", "Anime")
 
     Column(
         modifier = Modifier
@@ -134,11 +124,11 @@ fun SearchScreen(
                     onClick = { selectedCategory = "" }
                 )
             }
-            items(visibleCategories) { cat ->
+            items(categories) { cat ->
                 ModernFilterChip(
-                    selected = selectedCategory.equals(cat, ignoreCase = true),
-                    label = cat,
-                    onClick = { selectedCategory = if (selectedCategory.equals(cat, ignoreCase = true)) "" else cat }
+                    selected = selectedCategory == cat.id,
+                    label = cat.name,
+                    onClick = { selectedCategory = if (selectedCategory == cat.id) "" else cat.id }
                 )
             }
         }

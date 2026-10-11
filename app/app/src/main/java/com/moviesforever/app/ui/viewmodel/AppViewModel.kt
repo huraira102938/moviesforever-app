@@ -159,7 +159,7 @@ class AppViewModel @Inject constructor(
     )
 
     // Movies are NOT read from Firestore on this branch: the whole catalogue comes from the
-    // TMDB JSON files (TmdbRepository). Only these three small collections are listened to.
+    // movies.json (CatalogueRepository). Only these three small collections are listened to.
     private val contentDataState: StateFlow<ContentData> = combine(
         categoriesRepository.observeCategories(),
         genresRepository.observeGenres(),

@@ -14,10 +14,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +41,7 @@ import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.components.GoldOutlinedButton
+import com.moviesforever.app.ui.components.UrduNote
 import com.moviesforever.app.ui.theme.*
 
 @Composable
@@ -109,7 +114,7 @@ fun MovieDetailScreen(
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = "واپس",
                     tint = TextPrimary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -202,7 +207,7 @@ fun MovieDetailScreen(
                         shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
-                            text = "FREE",
+                            text = "مفت",
                             color = Black,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -246,39 +251,36 @@ fun MovieDetailScreen(
                     is MovieDownloadStatus.Completed -> {
                         // Downloaded: one button does it all, no separate "Watch Now"
                         GoldButton(
-                            text = "Watch Offline",
+                            text = "آف لائن دیکھیں",
                             onClick = onWatchNow,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                     is MovieDownloadStatus.Downloading -> {
                         GoldButton(
-                            text = "Watch Now",
+                            text = "ابھی دیکھیں",
                             onClick = onWatchNow,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(10.dp))
                         GoldOutlinedButton(
-                            text = "Downloading… ${downloadStatus.percent}%",
+                            text = "ڈاؤن لوڈ ہو رہا ہے… ${downloadStatus.percent}%",
                             onClick = { }, // no-op while in progress; cancel lives in the Downloads tab
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                     else -> {
                         GoldButton(
-                            text = "Watch Now",
+                            text = "ابھی دیکھیں",
                             onClick = onWatchNow,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        // "Download Offline" button removed (test feature). Trailer shown instead.
-                        if (hasTrailer) {
-                            Spacer(Modifier.height(10.dp))
-                            GoldOutlinedButton(
-                                text = "Watch Trailer",
-                                onClick = onWatchTrailer,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        Spacer(Modifier.height(10.dp))
+                        GoldOutlinedButton(
+                            text = "ڈاؤن لوڈ کریں",
+                            onClick = onDownload,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             } else {
@@ -292,12 +294,23 @@ fun MovieDetailScreen(
                     ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Watch Trailer", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("ٹریلر دیکھیں", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                     Spacer(Modifier.height(14.dp))
                 }
 
-                // Redesigned Lifetime Access Card
+                // Urdu note: this video is NOT free, payment is needed (no price or numbers here,
+                // they change and are shown in the card below).
+                UrduNote(
+                    title = "یہ ویڈیو مفت نہیں ہے",
+                    body = "یہ ویڈیو دیکھنے کے لیے آپ کو ادائیگی کرنی ہوگی۔ ادائیگی کے بعد آپ تمام ویڈیوز دیکھ سکیں گے۔ ادائیگی کا طریقہ جاننے کے لیے نیچے والا بٹن دبائیں۔",
+                    accent = Error,
+                    icon = Icons.Filled.Lock
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                // Redesigned  Access Card
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
                     shape = RoundedCornerShape(18.dp),
@@ -305,56 +318,58 @@ fun MovieDetailScreen(
                         .fillMaxWidth()
                         .border(1.dp, Gold.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
                 ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.LocalFireDepartment,
-                                contentDescription = null,
-                                tint = Error,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Column(Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.LocalFireDepartment,
+                                    contentDescription = null,
+                                    tint = Error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "محدود وقت کی پیشکش",
+                                    color = Error,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(Modifier.height(8.dp))
+
                             Text(
-                                text = "LIMITED TIME OFFER",
-                                color = Error,
-                                fontSize = 11.sp,
+                                text = if (pricing.standardPrice > 0)
+                                    "صرف ${pricing.standardPrice.toInt()} روپے میں سب کچھ دیکھیں"
+                                else
+                                    "تمام فلمیں دیکھیں",
+                                color = TextPrimary,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Text(
+                                text = "ایک بار ادائیگی کریں اور پورے سال کے لیے تمام فلمیں دیکھیں اور ڈاؤن لوڈ کریں۔",
+                                color = TextSecondary,
+                                fontSize = 13.sp,
+                                lineHeight = 24.sp
+                            )
+
+                            Spacer(Modifier.height(14.dp))
+
+                            GoldButton(
+                                text = "ادائیگی کا طریقہ دیکھیں",
+                                onClick = onUnlockClick,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            text = if (pricing.standardPrice > 0)
-                                "Unlock Everything for PKR ${pricing.standardPrice.toInt()}"
-                            else
-                                "Unlock Lifetime Access",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(4.dp))
-
-                        Text(
-                            text = "Pay once and enjoy unlimited movies and fast downloads forever. No monthly subscriptions, ever.",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        GoldButton(
-                            text = "Unlock Lifetime Access",
-                            onClick = onUnlockClick,
-                            modifier = Modifier.fillMaxWidth()
-                        )
                     }
                 }
 
                 Spacer(Modifier.height(12.dp))
-                AdminNoteBanner(note = pricing.note)
+
             }
 
             Spacer(Modifier.height(20.dp))
@@ -362,7 +377,7 @@ fun MovieDetailScreen(
             // Movie Description
             if (movie.description.isNotBlank()) {
                 Text(
-                    text = "Overview",
+                    text = "کہانی",
                     color = TextPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -381,7 +396,7 @@ fun MovieDetailScreen(
             if (movie.availableDubs.isNotEmpty()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Available Dubs: ",
+                        text = "دستیاب زبانیں: ",
                         color = TextMuted,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold

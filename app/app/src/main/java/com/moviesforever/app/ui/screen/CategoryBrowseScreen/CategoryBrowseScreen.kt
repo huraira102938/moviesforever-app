@@ -34,28 +34,8 @@ fun CategoryBrowseScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
 
-    // Expanded matching to catch Korean, Others, South, Tamil, etc.
-    val categoryMovies = remember(movies, categoryTitle) {
-        movies.filter { m ->
-            val titleLower = categoryTitle.lowercase()
-            val mCatLower = m.category.lowercase()
-
-            when {
-                titleLower.contains("south") -> {
-                    mCatLower.contains("south") || mCatLower.contains("tamil") ||
-                            mCatLower.contains("telugu") || mCatLower.contains("malayalam") ||
-                            mCatLower.contains("kannada") || m.genres.any { g -> g.lowercase().contains("south") || g.lowercase().contains("tamil") }
-                }
-                titleLower.contains("korean") || titleLower.contains("others") -> {
-                    mCatLower.contains("korean") || mCatLower.contains("kdrama") ||
-                            mCatLower.contains("others") || mCatLower.contains("other") ||
-                            m.genres.any { g -> g.lowercase().contains("korean") || g.lowercase().contains("other") } ||
-                            m.title.contains("korean", ignoreCase = true)
-                }
-                else -> mCatLower.equals(titleLower, ignoreCase = true) || m.genres.any { it.equals(categoryTitle, ignoreCase = true) }
-            }
-        }
-    }
+    // `movies` is already exactly this category's movies (the Home shelf), straight from movies.json.
+    val categoryMovies = movies
 
     val filteredMovies = remember(categoryMovies, query) {
         if (query.isBlank()) categoryMovies

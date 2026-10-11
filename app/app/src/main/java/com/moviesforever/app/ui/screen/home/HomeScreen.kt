@@ -37,10 +37,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.moviesforever.app.data.model.TmdbCategory
 import com.moviesforever.app.ui.components.MoviePoster
-import com.moviesforever.app.ui.viewmodel.TmdbViewModel
+import com.moviesforever.app.ui.components.UrduText
+import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
 import kotlinx.coroutines.delay
+
+/**
+ * Categories that are NOT shown as shelves on the Home screen (Punjabi, South).
+ * Their movies stay in the catalogue: Search and the category chips still show them.
+ */
+private val HIDDEN_HOME_CATEGORY_IDS = setOf(
+    "hpyasXGJKaBR9g0RWH3P", // Punjabi
+    "ZeRQutD2FN0BS9qTyeTP"  // South
+)
 
 @Composable
 fun HomeScreen(
@@ -52,30 +61,11 @@ fun HomeScreen(
     onShowAllClick: (String) -> Unit,
     onUnlockClick: () -> Unit,
     onAvatarClick: () -> Unit,
-    tmdbViewModel: TmdbViewModel = hiltViewModel()
+    catalogueViewModel: CatalogueViewModel = hiltViewModel()
 ) {
-    // TEST FEATURE: shelves loaded from the TMDB JSON files (one list per category).
-    // homeShelves = rating above 7 only, shuffled once per app launch (stable until app is closed).
-    val tmdbShelves by tmdbViewModel.homeShelves.collectAsState()
-
-    val bollywoodShelf = tmdbShelves[TmdbCategory.BOLLYWOOD].orEmpty()
-    val hollywoodShelf = tmdbShelves[TmdbCategory.HOLLYWOOD].orEmpty()
-    val southShelf = tmdbShelves[TmdbCategory.SOUTH].orEmpty()
-    val punjabiShelf = tmdbShelves[TmdbCategory.PUNJABI].orEmpty()
-    val othersShelf = tmdbShelves[TmdbCategory.OTHERS].orEmpty()
-    val animationShelf = tmdbShelves[TmdbCategory.ANIMATION].orEmpty()
-    val animeShelf = tmdbShelves[TmdbCategory.ANIME].orEmpty()
-    val trendingShelf = tmdbShelves[TmdbCategory.TRENDING].orEmpty()
-
-    val categoriesWithShelves = listOf(
-        Triple(TmdbCategory.BOLLYWOOD, TmdbCategory.BOLLYWOOD.title, bollywoodShelf),
-        Triple(TmdbCategory.HOLLYWOOD, TmdbCategory.HOLLYWOOD.title, hollywoodShelf),
-        Triple(TmdbCategory.SOUTH, TmdbCategory.SOUTH.title, southShelf),
-        Triple(TmdbCategory.PUNJABI, TmdbCategory.PUNJABI.title, punjabiShelf),
-        Triple(TmdbCategory.OTHERS, "Korean & Others", othersShelf),
-        Triple(TmdbCategory.ANIMATION, TmdbCategory.ANIMATION.title, animationShelf),
-        Triple(TmdbCategory.ANIME, TmdbCategory.ANIME.title, animeShelf)
-    )
+    // Shelves come from movies.json (one per category, in the admin's category order),
+    // shuffled once per app launch (stable until the app is closed).
+    val catalogue by catalogueViewModel.state.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -132,6 +122,15 @@ fun HomeScreen(
             }
         }
 
+        // FREE section: shown first, only to people who have NOT paid. Once premium, it disappears.
+        val freeMovies = catalogue.all.filter { it.isFree }
+        if (!isUnlocked && freeMovies.isNotEmpty()) {
+            item(key = "free_section") {
+                FreeSection(movies = freeMovies, onMovieClick = onMovieClick)
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+
         if (!isUnlocked) {
             item {
                 ModernOfferBanner(
@@ -142,24 +141,22 @@ fun HomeScreen(
             }
         }
 
-        // TMDB Shelves with shuffled preview (max 5 items) and "Show All" button
-        categoriesWithShelves.forEach { (catEnum, title, shelf) ->
-            if (shelf.isNotEmpty()) {
-                item(key = "tmdb_${catEnum.name}") {
-                    ModernSectionRow(
-                        title = title,
-                        movies = shelf.take(5),
-                        onMovieClick = onMovieClick,
-                        onShowAllClick = { onShowAllClick(catEnum.name) }
-                    )
-                }
+        // One shelf per category: shuffled preview (max 5 items) and a "Show All" button
+        catalogue.shelves.filter { it.categoryId !in HIDDEN_HOME_CATEGORY_IDS }.forEach { shelf ->
+            item(key = "shelf_${shelf.categoryId}") {
+                ModernSectionRow(
+                    title = shelf.title,
+                    movies = shelf.movies.take(5),
+                    onMovieClick = onMovieClick,
+                    onShowAllClick = { onShowAllClick(shelf.categoryId) }
+                )
             }
         }
 
-        if (trendingShelf.isNotEmpty()) {
-            item(key = "tmdb_TRENDING") {
+        if (catalogue.trending.isNotEmpty()) {
+            item(key = "shelf_trending") {
                 TrendingSection(
-                    movies = trendingShelf.take(6),
+                    movies = catalogue.trending,
                     onMovieClick = onMovieClick
                 )
             }
@@ -377,6 +374,82 @@ private fun TrendingGridTile(
             fontWeight = FontWeight.Medium,
             maxLines = 1
         )
+    }
+}
+
+/**
+ * Green "FREE" shelf. Green background + green border + a big FREE tag + an Urdu line, so even a
+ * person who cannot read English understands: these movies are free, everything else is paid.
+ */
+@Composable
+private fun FreeSection(
+    movies: List<Movie>,
+    onMovieClick: (Movie) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Success.copy(alpha = 0.10f))
+            .border(1.5.dp, Success, RoundedCornerShape(18.dp))
+            .padding(vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(Success, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "FREE",
+                    color = Black,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "Free to Watch",
+                color = TextPrimary,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            UrduText(
+                text = "مفت",
+                color = Success,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        UrduText(
+            text = "یہ فلمیں بالکل مفت ہیں۔ باقی تمام فلمیں دیکھنے کے لیے ادائیگی کرنا ضروری ہے۔",
+            color = TextSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(movies, key = { it.id }) { movie ->
+                MoviePoster(movie = movie, onClick = { onMovieClick(movie) })
+            }
+        }
     }
 }
 

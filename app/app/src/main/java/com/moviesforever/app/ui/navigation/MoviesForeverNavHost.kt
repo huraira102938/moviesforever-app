@@ -32,13 +32,15 @@ import com.moviesforever.app.ui.components.MoviesBottomBar
 import com.moviesforever.app.ui.screen.category.CategoryBrowseScreen
 import com.moviesforever.app.ui.screen.celebration.CelebrationScreen
 import com.moviesforever.app.ui.screen.detail.MovieDetailScreen
+import com.moviesforever.app.ui.screen.downloads.DownloadsScreen
 import com.moviesforever.app.ui.screen.home.HomeScreen
-import com.moviesforever.app.data.model.TMDB_ID_PREFIX
-import com.moviesforever.app.data.remote.openExternalLink
-import com.moviesforever.app.ui.viewmodel.TmdbViewModel
+import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
+import com.moviesforever.app.data.model.Category
 import com.moviesforever.app.ui.screen.notifications.NotificationsScreen
 import com.moviesforever.app.ui.screen.paused.PausedScreen
 import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
+import com.moviesforever.app.ui.screen.player.PlayerScreen
+import com.moviesforever.app.ui.screen.player.findActivity
 import com.moviesforever.app.ui.screen.profile.ProfileScreen
 import com.moviesforever.app.ui.screen.referral.ReferralScreen
 import com.moviesforever.app.ui.screen.search.SearchScreen
@@ -202,16 +204,17 @@ fun MoviesForeverNavHost(
             }
 
             composable(
-                route = "category_browse/{categoryName}",
-                arguments = listOf(navArgument("categoryName") { type = NavType.StringType })
+                route = "category_browse/{categoryId}",
+                arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val categoryName = backStackEntry.arguments?.getString("categoryName") ?: ""
-                val tmdbViewModel: TmdbViewModel = hiltViewModel()
-                val allTmdbMovies = tmdbViewModel.shelves.collectAsState().value.values.flatten().distinctBy { it.id }
+                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: ""
+                val catalogueViewModel: CatalogueViewModel = hiltViewModel()
+                val catalogue by catalogueViewModel.state.collectAsState()
+                val shelf = catalogue.shelves.find { it.categoryId == categoryId }
 
                 CategoryBrowseScreen(
-                    categoryTitle = categoryName,
-                    movies = allTmdbMovies,
+                    categoryTitle = shelf?.title.orEmpty(),
+                    movies = shelf?.movies.orEmpty(),
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
@@ -239,18 +242,20 @@ fun MoviesForeverNavHost(
                 arguments = listOf(navArgument("movieId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
-                val tmdbViewModel: TmdbViewModel = hiltViewModel()
-                val movie = tmdbViewModel.findMovie(movieId)
+                val catalogueViewModel: CatalogueViewModel = hiltViewModel()
+                val catalogue by catalogueViewModel.state.collectAsState()
+                // A downloaded movie must still open even if it is no longer in the catalogue.
+                val movie = catalogue.all.find { it.id == movieId } ?: uiState.downloadedMovieInfo[movieId]
                 if (movie == null) {
-                    navController.popBackStack()
+                    // Don't leave the screen while movies.json is still loading.
+                    if (catalogue.loaded) navController.popBackStack()
                 } else {
-                    val isTmdb = movie.id.startsWith(TMDB_ID_PREFIX)
                     MovieDetailScreen(
                         movie = movie,
                         pricing = uiState.pricing,
                         isUnlocked = uiState.isUnlocked,
                         genres = uiState.genres.associate { it.id to it.name },
-                        downloadStatus = com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
+                        downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = onWatchNow@{
                             if (uiState.account?.paused == true) {
                                 navController.navigate(Screen.Paused.route) {
@@ -265,11 +270,7 @@ fun MoviesForeverNavHost(
                                 }
                             }
                         },
-                        onWatchTrailer = onWatchTrailer@{
-                            if (isTmdb) {
-                                openExternalLink(context, movie.trailerUrl.orEmpty())
-                                return@onWatchTrailer
-                            }
+                        onWatchTrailer = {
                             if (uiState.account?.paused == true) {
                                 navController.navigate(Screen.Paused.route) {
                                     popUpTo(0) { inclusive = true }
@@ -279,7 +280,27 @@ fun MoviesForeverNavHost(
                             }
                         },
                         onDownload = {
-                            scope.launch { snackbarHostState.showSnackbar("Offline downloads have been removed.") }
+                            if (uiState.account?.paused == true) {
+                                navController.navigate(Screen.Paused.route) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            } else {
+                                viewModel.downloadMovie(movie) { result ->
+                                    when (result) {
+                                        DownloadRequestResult.Started -> {
+                                            scope.launch { snackbarHostState.showSnackbar("Download started") }
+                                        }
+                                        DownloadRequestResult.RequiresUnlock -> {
+                                            navController.navigate(Screen.PaymentInstructions.route)
+                                        }
+                                        DownloadRequestResult.RequiresWifi -> {
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         },
                         onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
                         onBack = { navController.popBackStackSafe() }
@@ -300,29 +321,23 @@ fun MoviesForeverNavHost(
                 val movieId = backStackEntry.arguments?.getString("movieId") ?: ""
                 val isTrailer = backStackEntry.arguments?.getBoolean("trailer") == true
 
-                val tmdbViewModel: TmdbViewModel = hiltViewModel()
-                val movie = tmdbViewModel.findMovie(movieId)
-
+                val catalogueViewModel: CatalogueViewModel = hiltViewModel()
+                val catalogue by catalogueViewModel.state.collectAsState()
+                // A downloaded movie must still play even if it is no longer in the catalogue.
+                val movie = catalogue.all.find { it.id == movieId } ?: uiState.downloadedMovieInfo[movieId]
                 if (movie == null) {
-                    navController.popBackStack()
+                    if (catalogue.loaded) navController.popBackStack()
                 } else {
-                    val url = if (isTrailer) {
-                        movie.trailerUrl
-                    } else if (movie.id.startsWith(TMDB_ID_PREFIX)) {
-                        val actualTmdbId = movie.id.removePrefix(TMDB_ID_PREFIX)
-                        "https://vidsrc.sbs/embed/movie/$actualTmdbId"
-                    } else {
-                        movie.videoUrl
-                    }
-
-                    if (!url.isNullOrBlank()) {
-                        val intent = Intent(context, com.moviesforever.app.ui.screen.player.PlayerActivity::class.java).apply {
-                            putExtra("EXTRA_VIDEO_URL", url)
-                        }
-                        context.startActivity(intent)
+                    val url = if (isTrailer) movie.trailerUrl else movie.videoUrl
+                    if (url.isNullOrBlank()) {
                         navController.popBackStack()
                     } else {
-                        navController.popBackStack()
+                        PlayerScreen(
+                            videoUrl = url,
+                            title = movie.title,
+                            onBack = { navController.popBackStackSafe() },
+                            cacheKey = if (isTrailer) null else movie.id
+                        )
                     }
                 }
             }
@@ -377,15 +392,16 @@ private fun MainScaffoldWithTabs(
     lockViewModel: LockViewModel
 ) {
     val context = LocalContext.current
-    val tmdbViewModel: TmdbViewModel = hiltViewModel()
-    val allTmdbMovies = tmdbViewModel.shelves.collectAsState().value.values.flatten().distinctBy { it.id }
+    val catalogueViewModel: CatalogueViewModel = hiltViewModel()
+    val catalogue by catalogueViewModel.state.collectAsState()
+    val searchCategories = remember(catalogue.shelves) {
+        catalogue.shelves.map { Category(id = it.categoryId, name = it.title) }
+    }
 
-    // Adjusted tab indices since Downloads (tab index 2) was removed:
-    // 0 -> Home, 1 -> Search, 2 -> Profile
+    // Tabs: 0 -> Home, 1 -> Search, 2 -> Downloads, 3 -> Profile
     Scaffold(
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         bottomBar = {
-            // NOTE: Ensure your MoviesBottomBar component corresponds to these 3 tabs
             MoviesBottomBar(currentTab = currentTab, onTabSelected = onTabSelected)
         }
     ) { paddingValues ->
@@ -403,20 +419,35 @@ private fun MainScaffoldWithTabs(
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
-                    onShowAllClick = { categoryName ->
-                        navController.navigate("category_browse/$categoryName")
+                    onShowAllClick = { categoryId ->
+                        navController.navigate("category_browse/$categoryId")
                     },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
-                    onAvatarClick = { onTabSelected(2) } // Avatar points to Profile (now tab 2)
+                    onAvatarClick = { onTabSelected(3) }
                 )
                 1 -> SearchScreen(
-                    movies = allTmdbMovies,
+                    movies = catalogue.all,
+                    categories = searchCategories,
                     genres = uiState.genres,
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     }
                 )
-                2 -> ProfileScreen(
+                2 -> DownloadsScreen(
+                    downloadedMovies = uiState.downloadedMovies,
+                    // Built purely from the download system (see AppUiState), not by intersecting
+                    // with the catalogue -- in-progress/completed downloads stay visible even if a
+                    // movie was removed from movies.json.
+                    downloadingMovies = uiState.downloadingMovies,
+                    downloadStatuses = uiState.downloadStatuses,
+                    isUnlocked = uiState.isUnlocked,
+                    onMovieClick = { movie ->
+                        navController.navigate(Screen.MovieDetail.createRoute(movie.id))
+                    },
+                    onRemoveDownload = { movieId -> viewModel.removeDownload(movieId) },
+                    onSettings = { navController.navigate(Screen.Settings.route) }
+                )
+                3 -> ProfileScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
                     account = uiState.account,
@@ -440,15 +471,4 @@ private fun shareText(context: android.content.Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(sendIntent, "Share"))
-}
-
-fun android.content.Context.findActivity(): android.app.Activity? {
-    var currentContext = this
-    while (currentContext is android.content.ContextWrapper) {
-        if (currentContext is android.app.Activity) {
-            return currentContext
-        }
-        currentContext = currentContext.baseContext
-    }
-    return null
 }

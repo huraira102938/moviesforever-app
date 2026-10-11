@@ -32,14 +32,6 @@
             </intent-filter>
         </activity>
 
-        <!-- NEW NATIVE PLAYER ACTIVITY -->
-        <activity
-            android:name=".ui.screen.player.PlayerActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-            android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
-
         <service
             android:name=".download.MoviesForeverDownloadService"
             android:exported="false"
