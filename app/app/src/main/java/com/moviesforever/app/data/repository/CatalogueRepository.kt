@@ -2,6 +2,7 @@ package com.moviesforever.app.data.repository
 
 import android.content.Context
 import com.google.gson.Gson
+import com.moviesforever.app.data.model.Banner
 import com.moviesforever.app.data.model.CatalogueFile
 import com.moviesforever.app.data.model.CatalogueState
 import com.moviesforever.app.data.model.Shelf
@@ -55,6 +56,10 @@ class CatalogueRepository @Inject constructor(
 
     private val started = AtomicBoolean(false)
 
+    private companion object {
+        const val MAX_BANNERS = 5
+    }
+
     /** New value every time the app process starts -> new random order on every app launch. */
     private val sessionSeed: Long = System.nanoTime()
 
@@ -101,6 +106,7 @@ class CatalogueRepository @Inject constructor(
             trending = file.trending.mapNotNull { byId[it] }.shuffled(Random(sessionSeed + 7919)),
             // Shuffled once per app launch, so Search shows a new scattered order every time the app is opened.
             all = visible.shuffled(Random(sessionSeed + 31)),
+            banners = file.banners,
             loaded = true
         )
     }
@@ -141,6 +147,11 @@ class CatalogueRepository @Inject constructor(
             raw.copy(
                 categories = (raw.categories ?: emptyList()).filter { it.id.isNotBlank() },
                 trending = raw.trending ?: emptyList(),
+                banners = (raw.banners ?: emptyList())
+                    .filter { it.imageUrl?.isNotBlank() == true }
+                    .map { it.copy(id = it.id ?: "", imageKey = it.imageKey ?: "", actionType = it.actionType ?: "", actionValue = it.actionValue ?: "") }
+                    .sortedBy { it.order }
+                    .take(MAX_BANNERS),
                 movies = movies
             )
         } catch (e: Exception) {

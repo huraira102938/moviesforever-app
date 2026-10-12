@@ -16,7 +16,7 @@ class NotificationsRepositoryImpl @Inject constructor(
 
     private val collection = firestore.collection("notifications")
 
-    // Only the newest 30 are read, so launch cost stays flat however many notifications the
+    // Only the newest 3 are read, so launch cost stays flat however many notifications the
     // admin has sent over time (it used to re-read every notification ever sent).
     override fun observeNotifications(): Flow<List<AppNotification>> = callbackFlow {
         val registration = collection
@@ -44,4 +44,4 @@ class NotificationsRepositoryImpl @Inject constructor(
     }
 }
 
-private const val NOTIFICATION_LIMIT = 30L
+private const val NOTIFICATION_LIMIT = 3L

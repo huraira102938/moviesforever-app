@@ -17,6 +17,8 @@ data class CatalogueFile(
     val categories: List<CatalogueCategory> = emptyList(),
     /** Movie ids in the order the admin panel's Trending page shows them. */
     val trending: List<String> = emptyList(),
+    /** Home banners (the admin keeps at most 5). Same fields as [Banner]. */
+    val banners: List<Banner> = emptyList(),
     val movies: List<Movie> = emptyList()
 )
 
@@ -38,6 +40,7 @@ data class CatalogueState(
     val shelves: List<Shelf> = emptyList(),
     val trending: List<Movie> = emptyList(),
     val all: List<Movie> = emptyList(),
+    val banners: List<Banner> = emptyList(),
     /** True once movies.json (saved copy or fresh download) has been read at least once. */
     val loaded: Boolean = false
 )

@@ -275,7 +275,7 @@ fun MoviesForeverNavHost(
                         movie = movie,
                         pricing = uiState.pricing,
                         isUnlocked = uiState.isUnlocked,
-                        genres = uiState.genres.associate { it.id to it.name },
+                        genres = emptyMap(), // genres are no longer loaded (saves reads); chips are simply not shown
                         downloadStatus = uiState.downloadStatuses[movie.id] ?: com.moviesforever.app.data.repository.MovieDownloadStatus.NotDownloaded,
                         onWatchNow = onWatchNow@{
                             if (uiState.account?.paused == true) {
@@ -429,7 +429,7 @@ private fun MainScaffoldWithTabs(
         Box(modifier = Modifier.padding(paddingValues)) {
             when (currentTab) {
                 0 -> HomeScreen(
-                    banners = uiState.banners,
+                    banners = catalogue.banners,
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->
@@ -449,7 +449,7 @@ private fun MainScaffoldWithTabs(
                 1 -> SearchScreen(
                     movies = catalogue.all,
                     categories = searchCategories,
-                    genres = uiState.genres,
+                    genres = emptyList(),
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     }

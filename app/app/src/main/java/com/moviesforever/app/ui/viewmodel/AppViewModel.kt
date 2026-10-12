@@ -17,12 +17,9 @@ import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.repository.AccountRepository
 import com.moviesforever.app.data.repository.AppShareRepository
-import com.moviesforever.app.data.repository.BannersRepository
-import com.moviesforever.app.data.repository.CategoriesRepository
 import com.moviesforever.app.data.repository.ContactDetailsRepository
 import com.moviesforever.app.data.repository.DownloadRepository
 import com.moviesforever.app.data.repository.DownloadRequestResult
-import com.moviesforever.app.data.repository.GenresRepository
 import com.moviesforever.app.data.repository.InstallRepository
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.NotificationsRepository
@@ -118,9 +115,6 @@ sealed class InstallCheckState {
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    categoriesRepository: CategoriesRepository,
-    genresRepository: GenresRepository,
-    bannersRepository: BannersRepository,
     pricingRepository: PricingRepository,
     paymentDetailsRepository: PaymentDetailsRepository,
     contactDetailsRepository: ContactDetailsRepository,
@@ -151,32 +145,6 @@ class AppViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = InstallCheckState.Loading
         )
-
-    private data class ContentData(
-        val categories: List<Category>,
-        val genres: List<Genre>,
-        val banners: List<Banner>
-    )
-
-    // Movies are NOT read from Firestore on this branch: the whole catalogue comes from the
-    // movies.json (CatalogueRepository). Only these three small collections are listened to.
-    private val contentDataState: StateFlow<ContentData> = combine(
-        categoriesRepository.observeCategories(),
-        genresRepository.observeGenres(),
-        bannersRepository.observeBanners()
-    ) { categories, genres, banners ->
-        ContentData(categories, genres, banners)
-    }.stateIn(
-        scope = viewModelScope,
-        // Eagerly (not WhileSubscribed): these are real Firestore listeners
-        // now (see MoviesRepositoryImpl etc.), but Firestore still bills a
-        // fresh full-collection read every time a listener reconnects --
-        // detaching after a few quiet seconds and reattaching on the next
-        // navigation would otherwise silently repeat that cost. Eagerly
-        // keeps this attached once for the whole app session instead.
-        started = SharingStarted.Eagerly,
-        initialValue = ContentData(emptyList(), emptyList(), emptyList())
-    )
 
     private val pricingState: StateFlow<PricingSettings> = pricingRepository.observePricing()
         .stateIn(
@@ -298,10 +266,9 @@ class AppViewModel @Inject constructor(
     private val baseUiState: StateFlow<AppUiState> = combine(
         unlockCheckState,
         pricingState,
-        contentDataState,
         downloadsCombinedState,
         miscState
-    ) { unlockCheck, pricing, content, downloadsCombined, misc ->
+    ) { unlockCheck, pricing, downloadsCombined, misc ->
         val (downloadStatuses, downloadedMovieInfo) = downloadsCombined
         val (wifiOnly, paymentAndContact) = misc
         val (paymentDetails, contactDetails) = paymentAndContact
@@ -310,9 +277,6 @@ class AppViewModel @Inject constructor(
             pricing = pricing,
             paymentDetails = paymentDetails,
             contactDetails = contactDetails,
-            categories = content.categories,
-            genres = content.genres,
-            banners = content.banners,
             downloadStatuses = downloadStatuses,
             downloadedMovieInfo = downloadedMovieInfo,
             wifiOnlyDownloads = wifiOnly,
