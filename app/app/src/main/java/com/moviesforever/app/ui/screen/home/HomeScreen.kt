@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
+import com.moviesforever.app.data.model.CategoryRules
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.theme.*
@@ -41,15 +42,6 @@ import com.moviesforever.app.ui.components.MoviePoster
 import com.moviesforever.app.ui.components.UrduText
 import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
 import kotlinx.coroutines.delay
-
-/**
- * Categories that are NOT shown as shelves on the Home screen (Punjabi, South).
- * Their movies stay in the catalogue: Search and the category chips still show them.
- */
-private val HIDDEN_HOME_CATEGORY_IDS = setOf(
-    "hpyasXGJKaBR9g0RWH3P", // Punjabi
-    "ZeRQutD2FN0BS9qTyeTP"  // South
-)
 
 @Composable
 fun HomeScreen(
@@ -114,10 +106,10 @@ fun HomeScreen(
             }
         }
 
-        // Hero Banner Carousel (Unclickable)
+        // Hero Banner Carousel (tap action comes from the admin panel: movie / website / WhatsApp / channel)
         if (banners.isNotEmpty()) {
             item {
-                ModernBannerCarousel(banners = banners)
+                ModernBannerCarousel(banners = banners, onBannerClick = onBannerClick)
                 Spacer(Modifier.height(16.dp))
             }
         }
@@ -142,7 +134,7 @@ fun HomeScreen(
         }
 
         // One shelf per category: shuffled preview (max 5 items) and a "Show All" button
-        catalogue.shelves.filter { it.categoryId !in HIDDEN_HOME_CATEGORY_IDS }.forEach { shelf ->
+        catalogue.shelves.filter { it.categoryId !in CategoryRules.HIDDEN_ON_HOME }.forEach { shelf ->
             item(key = "shelf_${shelf.categoryId}") {
                 ModernSectionRow(
                     title = shelf.title,
@@ -156,7 +148,7 @@ fun HomeScreen(
         if (catalogue.trending.isNotEmpty()) {
             item(key = "shelf_trending") {
                 TrendingSection(
-                    movies = catalogue.trending,
+                    movies = catalogue.trending.take(9), // only 9; the list is already scattered differently on every app launch
                     onMovieClick = onMovieClick
                 )
             }
@@ -166,7 +158,7 @@ fun HomeScreen(
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun ModernBannerCarousel(banners: List<Banner>) {
+private fun ModernBannerCarousel(banners: List<Banner>, onBannerClick: (Banner) -> Unit) {
     val actualCount = banners.size
     val isLooping = actualCount > 1
     val virtualPageCount = if (isLooping) actualCount * 25 else actualCount
@@ -206,7 +198,9 @@ private fun ModernBannerCarousel(banners: List<Banner>) {
             val banner = banners[page % actualCount]
             Card(
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(enabled = banner.isTappable()) { onBannerClick(banner) },
                 colors = CardDefaults.cardColors(containerColor = DarkSurface)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {

@@ -12,7 +12,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -75,6 +77,13 @@ fun SearchScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        var filterMenuOpen by remember { mutableStateOf(false) }
+        val selectedCategoryName = categories.find { it.id == selectedCategory }?.name
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -100,7 +109,7 @@ fun SearchScreen(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = DarkSurface,
@@ -113,25 +122,74 @@ fun SearchScreen(
             )
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.width(8.dp))
 
-        // Category Filter Chips only (Sub-categories/genres completely removed)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            item {
-                ModernFilterChip(
-                    selected = selectedCategory.isBlank(),
-                    label = "All",
-                    onClick = { selectedCategory = "" }
+        // Filter button: replaces the old row of category chips, which took a lot of space.
+        // Gold-filled while a category is chosen, so it is clear a filter is on.
+        Box {
+            val filterOn = selectedCategory.isNotBlank()
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (filterOn) Gold else DarkSurface)
+                    .border(1.dp, if (filterOn) Gold else DarkElevated, RoundedCornerShape(14.dp))
+                    .clickable { filterMenuOpen = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FilterList,
+                    contentDescription = "Filter",
+                    tint = if (filterOn) Black else Gold,
+                    modifier = Modifier.size(26.dp)
                 )
             }
-            items(categories) { cat ->
-                ModernFilterChip(
-                    selected = selectedCategory == cat.id,
-                    label = cat.name,
-                    onClick = { selectedCategory = if (selectedCategory == cat.id) "" else cat.id }
+
+            DropdownMenu(
+                expanded = filterMenuOpen,
+                onDismissRequest = { filterMenuOpen = false },
+                modifier = Modifier.background(DarkSurface)
+            ) {
+                FilterMenuItem(
+                    label = "All",
+                    selected = selectedCategory.isBlank(),
+                    onClick = { selectedCategory = ""; filterMenuOpen = false }
+                )
+                categories.forEach { cat ->
+                    FilterMenuItem(
+                        label = cat.name,
+                        selected = selectedCategory == cat.id,
+                        onClick = { selectedCategory = cat.id; filterMenuOpen = false }
+                    )
+                }
+            }
+        }
+        }
+
+        // When a filter is on, show it as one small removable tag (instead of a whole chip row).
+        if (selectedCategoryName != null) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Gold.copy(alpha = 0.15f))
+                    .border(1.dp, Gold, CircleShape)
+                    .clickable { selectedCategory = "" }
+                    .padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(selectedCategoryName, color = Gold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Filled.Clear,
+                    contentDescription = "Remove filter",
+                    tint = Gold,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
+
+        Spacer(Modifier.height(12.dp))
 
         Spacer(Modifier.height(12.dp))
 
@@ -170,24 +228,25 @@ fun SearchScreen(
 }
 
 @Composable
-private fun ModernFilterChip(
-    selected: Boolean,
+private fun FilterMenuItem(
     label: String,
+    selected: Boolean,
     onClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (selected) Gold else DarkSurface)
-            .border(1.dp, if (selected) Gold else DarkElevated, CircleShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 5.dp)
-    ) {
-        Text(
-            text = label,
-            color = if (selected) Black else TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
-        )
-    }
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                color = if (selected) Gold else TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            )
+        },
+        trailingIcon = {
+            if (selected) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Gold, modifier = Modifier.size(18.dp))
+            }
+        },
+        onClick = onClick
+    )
 }

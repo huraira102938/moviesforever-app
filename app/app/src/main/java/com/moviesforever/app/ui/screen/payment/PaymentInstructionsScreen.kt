@@ -9,11 +9,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -27,6 +29,8 @@ import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.theme.*
+
+private val WhatsAppGreen = Color(0xFF25D366)
 
 /**
  * Payment page, fully in Urdu and kept simple:
@@ -169,12 +173,31 @@ fun PaymentInstructionsScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // 4. Send receipt
-                GoldButton(
-                    text = "رسید واٹس ایپ پر بھیجیں",
+                // 4. Send receipt: WhatsApp green, so it stands apart from the gold "open account" button below
+                Button(
                     onClick = { onSendScreenshotWhatsApp("") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(58.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WhatsAppGreen,
+                        contentColor = Color.White
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Chat,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "رسید واٹس ایپ پر بھیجیں",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
                 Spacer(Modifier.height(28.dp))
 

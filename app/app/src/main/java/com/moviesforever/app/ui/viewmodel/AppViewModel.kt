@@ -58,7 +58,7 @@ data class AppUiState(
     val banners: List<Banner> = emptyList(),
     val downloadStatuses: Map<String, MovieDownloadStatus> = emptyMap(),
     val downloadedMovieInfo: Map<String, Movie> = emptyMap(),
-    val wifiOnlyDownloads: Boolean = true,
+    val wifiOnlyDownloads: Boolean = false,
     val loading: Boolean = true,
     val account: UserAccount? = null,
     val earnings: ReferralEarnings = ReferralEarnings(),
@@ -244,7 +244,7 @@ class AppViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = true
+            initialValue = false
         )
 
     // Paired so the 5-flow combine() below (unlockCheck/pricing/content/

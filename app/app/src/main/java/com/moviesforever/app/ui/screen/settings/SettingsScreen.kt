@@ -68,7 +68,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text("WiFi-only downloads", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        "Download movies only when connected to WiFi (recommended)",
+                        "Download movies only when connected to WiFi (off by default: downloads also work on mobile data)",
                         color = TextMuted,
                         fontSize = 12.sp
                     )

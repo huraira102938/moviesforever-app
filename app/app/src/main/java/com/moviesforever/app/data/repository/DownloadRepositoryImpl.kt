@@ -48,7 +48,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
     override fun observeWifiOnly(): Flow<Boolean> {
         return context.downloadSettingsStore.data.map { prefs ->
-            prefs[Keys.WIFI_ONLY] ?: true
+            prefs[Keys.WIFI_ONLY] ?: false
         }
     }
 

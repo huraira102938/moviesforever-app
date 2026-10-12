@@ -26,6 +26,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.moviesforever.app.data.model.CategoryRules
+import com.moviesforever.app.ui.components.UrduErrorDialog
 import androidx.navigation.navArgument
 import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.ui.components.MoviesBottomBar
@@ -137,11 +139,20 @@ fun MoviesForeverNavHost(
                     }
                 }
 
+                // Wrong code / username etc.: shown as a dialog in Urdu, not a quick snackbar.
+                var redeemErrorMessage by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(lockState.error) {
                     lockState.error?.let {
-                        scope.launch { snackbarHostState.showSnackbar(it) }
+                        redeemErrorMessage = it
                         lockViewModel.clearError()
                     }
+                }
+                redeemErrorMessage?.let { message ->
+                    UrduErrorDialog(
+                        message = message,
+                        title = "کوڈ قبول نہیں ہوا",
+                        onDismiss = { redeemErrorMessage = null }
+                    )
                 }
 
                 PaymentInstructionsScreen(
@@ -168,7 +179,7 @@ fun MoviesForeverNavHost(
                     },
                     onRedeemCode = { id, username ->
                         if (id.isBlank() || username.isBlank()) {
-                            scope.launch { snackbarHostState.showSnackbar("Please enter both Code ID and Username.") }
+                            redeemErrorMessage = "براہ کرم کوڈ اور یوزرنیم دونوں لکھیں۔"
                         } else {
                             lockViewModel.redeem(id, username)
                         }
@@ -211,10 +222,20 @@ fun MoviesForeverNavHost(
                 val catalogueViewModel: CatalogueViewModel = hiltViewModel()
                 val catalogue by catalogueViewModel.state.collectAsState()
                 val shelf = catalogue.shelves.find { it.categoryId == categoryId }
+                // Some categories also pull in others (Bollywood also shows South), mixed together
+                // in a new scattered order each time this screen opens.
+                val browseMovies = remember(catalogue.shelves, categoryId) {
+                    val ids = listOf(categoryId) + CategoryRules.SHOW_ALL_ALSO_INCLUDES[categoryId].orEmpty()
+                    catalogue.shelves
+                        .filter { it.categoryId in ids }
+                        .flatMap { it.movies }
+                        .distinctBy { it.id }
+                        .shuffled()
+                }
 
                 CategoryBrowseScreen(
                     categoryTitle = shelf?.title.orEmpty(),
-                    movies = shelf?.movies.orEmpty(),
+                    movies = browseMovies,
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
@@ -412,8 +433,8 @@ private fun MainScaffoldWithTabs(
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->
-                        if (banner.clickable && banner.linkedMovieId != null) {
-                            navController.navigate(Screen.MovieDetail.createRoute(banner.linkedMovieId))
+                        handleBannerClick(context, banner) { movieId ->
+                            navController.navigate(Screen.MovieDetail.createRoute(movieId))
                         }
                     },
                     onMovieClick = { movie ->
