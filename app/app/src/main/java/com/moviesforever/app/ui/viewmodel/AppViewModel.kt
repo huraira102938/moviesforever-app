@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -308,6 +309,19 @@ class AppViewModel @Inject constructor(
     )
 
     init {
+        // Admin deleted this user's account (confirmed by the server, not the offline copy):
+        // go back to the free-account state.
+        viewModelScope.launch {
+            accountRepository.serverPresence.collect { presence ->
+                if (presence.exists) return@collect
+                val current = unlockRepositoryRef.observeUnlockInfo().first()
+                if (current != null && current.id == presence.userId) {
+                    downloadRepository.clearAllDownloads()
+                    unlockRepositoryRef.resetUnlock()
+                }
+            }
+        }
+
         // Keep this device subscribed to the push topic for its current group
         // (free / paid / paused). Waits for the unlock check to finish and lets the
         // account (paused flag) settle for a moment so we don't flip topics needlessly.

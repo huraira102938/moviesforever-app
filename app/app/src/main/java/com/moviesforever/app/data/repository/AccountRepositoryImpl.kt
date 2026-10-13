@@ -4,6 +4,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.moviesforever.app.data.model.UserAccount
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,6 +14,9 @@ import javax.inject.Singleton
 class AccountRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore
 ) : AccountRepository {
+
+    private val _serverPresence = MutableSharedFlow<AccountPresence>(extraBufferCapacity = 8)
+    override val serverPresence: SharedFlow<AccountPresence> = _serverPresence
 
     // Live listener (not a one-shot get()) because this data changes the
     // moment the admin verifies a payment -- referralCount, payment details,
@@ -25,6 +30,9 @@ class AccountRepositoryImpl @Inject constructor(
 
         val registration = firestore.collection("users").document(userId)
             .addSnapshotListener { snapshot, error ->
+                if (error == null && snapshot != null && !snapshot.metadata.isFromCache) {
+                    _serverPresence.tryEmit(AccountPresence(userId, snapshot.exists()))
+                }
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     trySend(null)
                     return@addSnapshotListener

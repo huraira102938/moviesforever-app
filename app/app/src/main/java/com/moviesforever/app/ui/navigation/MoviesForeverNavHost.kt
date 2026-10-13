@@ -251,8 +251,9 @@ fun MoviesForeverNavHost(
                     onShare = { text -> shareText(context, text) },
                     onStartWatching = {
                         viewModel.markCelebrationShown()
+                        currentTab = 0 // always land on Home (the tab number is remembered from before)
                         navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Celebration.route) { inclusive = true }
+                            popUpTo(Screen.Main.route) { inclusive = true }
                         }
                     }
                 )
@@ -350,7 +351,14 @@ fun MoviesForeverNavHost(
                     if (catalogue.loaded) navController.popBackStack()
                 } else {
                     val url = if (isTrailer) movie.trailerUrl else movie.videoUrl
-                    if (url.isNullOrBlank()) {
+                    // A full movie only plays for free movies or unlocked users (trailers are open to all).
+                    val blocked = !isTrailer && !movie.isFree && !uiState.isUnlocked && !uiState.loading
+                    if (blocked) {
+                        LaunchedEffect(Unit) {
+                            navController.popBackStack()
+                            navController.navigate(Screen.PaymentInstructions.route)
+                        }
+                    } else if (url.isNullOrBlank()) {
                         navController.popBackStack()
                     } else {
                         PlayerScreen(

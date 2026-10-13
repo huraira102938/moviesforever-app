@@ -224,25 +224,28 @@ fun PaymentInstructionsScreen(
                         )
                         Spacer(Modifier.height(12.dp))
 
-                        OutlinedTextField(
-                            value = codeId,
-                            onValueChange = { codeId = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("کوڈ") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = textFieldColors()
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = signInUsername,
-                            onValueChange = { signInUsername = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("یوزرنیم") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = textFieldColors()
-                        )
+                        // Typing must go left-to-right (code and username are English), even though the screen is Urdu/RTL.
+                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                            OutlinedTextField(
+                                value = codeId,
+                                onValueChange = { codeId = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("کوڈ") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = textFieldColors()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = signInUsername,
+                                onValueChange = { signInUsername = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("یوزرنیم") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = textFieldColors()
+                            )
+                        }
                         Spacer(Modifier.height(14.dp))
 
                         GoldButton(
