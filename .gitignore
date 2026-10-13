@@ -28,6 +28,8 @@ Thumbs.db
 
 # Secrets - never commit
 application release keys and passwords/
+*.jks
+*.keystore
 
 # Build artifacts
 app/app/release/
