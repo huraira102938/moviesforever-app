@@ -140,20 +140,20 @@ export default function MovieDetailScreen() {
           <Card className="border-brand-500/30">
             <div className="flex items-center gap-2 mb-3">
               <Lock className="w-5 h-5 text-brand-400" />
-              <h3 className="text-white font-semibold">Lifetime Access</h3>
+              <h3 className="text-white font-semibold">One Year Access</h3>
             </div>
             <div className="flex items-baseline gap-1 mb-2">
               <span className="text-2xl font-black text-brand-400">
                 PKR {pricing?.standardPrice?.toLocaleString() ?? '—'}
               </span>
-              <span className="text-xs text-gray-500">one-time</span>
+              <span className="text-xs text-gray-500">1 year</span>
             </div>
             <p className="text-gray-400 text-sm mb-4">
               Unlock full access to stream and download this movie.
             </p>
             <Button onClick={() => navigate('/lock')} className="w-full">
               <Lock className="w-4 h-4" />
-              Unlock Lifetime Access
+              Unlock One Year Access
             </Button>
           </Card>
         )}

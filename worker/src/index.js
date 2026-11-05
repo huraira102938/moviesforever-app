@@ -22,6 +22,8 @@
  *   FIREBASE_SERVICE_ACCOUNT   full service-account JSON (client_email + private_key)
  */
 
+import { installSnapshotWrites } from "./installSnapshots.js";
+
 const FIRESTORE_BASE = "https://firestore.googleapis.com/v1";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
@@ -366,6 +368,16 @@ async function handleContact() {
   }
 }
 
+async function saveInstallSnapshot(scheduledMs) {
+  const doc = await getDocument("installs", "counter");
+  const total = fieldsToObject(doc && doc.fields).installCount;
+  // Never save a bad reading: it would show up as a wrong day in the report.
+  if (!Number.isInteger(total)) throw new Error(`bad installCount: ${total}`);
+  for (const { date, fields } of installSnapshotWrites(scheduledMs, total)) {
+    await updateDocument("installDaily", date, Object.keys(fields), fields);
+  }
+}
+
 async function handleStats() {
   let movieCount = 0;
   let installCount = 0;
@@ -479,7 +491,7 @@ async function handleRedeem(request) {
 
   return jsonResponse(200, {
     success: true,
-    message: "Unlocked! Enjoy lifetime access.",
+    message: "Unlocked! Enjoy one year access.",
     username,
   });
 }
@@ -719,7 +731,8 @@ export default {
     return jsonResponse(404, { success: false, message: "Not found." });
   },
 
-  // Cron trigger (every minute): deliver any notifications the admin has queued.
+  // Cron trigger (every minute): deliver any notifications the admin has queued, and once an
+  // hour save the install total for the admin panel's Installs report.
   async scheduled(event, env, ctx) {
     globalThis.FIREBASE_PROJECT_ID = env.FIREBASE_PROJECT_ID;
     globalThis.FIREBASE_SERVICE_ACCOUNT = env.FIREBASE_SERVICE_ACCOUNT;
@@ -728,5 +741,12 @@ export default {
         console.error("push cron failed", String(e && e.message ? e.message : e))
       )
     );
+    if (new Date(event.scheduledTime).getUTCMinutes() === 0) {
+      ctx.waitUntil(
+        saveInstallSnapshot(event.scheduledTime).catch((e) =>
+          console.error("install snapshot failed", String(e && e.message ? e.message : e))
+        )
+      );
+    }
   },
 };

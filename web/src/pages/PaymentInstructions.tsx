@@ -50,7 +50,7 @@ export default function PaymentInstructions() {
 
   const handleSendScreenshot = () => {
     if (!contactDetails?.whatsappNumber) return
-    const message = 'Hi! I have made the payment for MoviesForever Lifetime Access.'
+    const message = 'Hi! I have made the payment for MoviesForever One Year Access.'
     openWhatsApp(contactDetails.whatsappNumber, message)
   }
 
@@ -64,7 +64,7 @@ export default function PaymentInstructions() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-bold text-white">Lifetime Pass Checkout</h1>
+          <h1 className="text-lg font-bold text-white">One Year Pass Checkout</h1>
         </header>
 
         <div className="flex flex-col gap-5">
@@ -76,7 +76,7 @@ export default function PaymentInstructions() {
               <div>
                 <p className="text-red-400 text-[11px] font-bold tracking-wide">LIMITED OFFER</p>
                 <p className="text-brand-300 text-lg font-bold">
-                  {pricing?.standardPrice ? `PKR ${pricing.standardPrice.toLocaleString()} • One-Time Payment` : 'One-Time Payment'}
+                  {pricing?.standardPrice ? `PKR ${pricing.standardPrice.toLocaleString()} • One Year Access` : 'One Year Access'}
                 </p>
               </div>
             </div>
@@ -114,7 +114,7 @@ export default function PaymentInstructions() {
               <StepCard
                 stepNumber="3"
                 title="Get Account Credentials"
-                description="Once verified, our team will send your unique Code ID & Username to unlock your account forever."
+                description="Once verified, our team will send your unique Code ID & Username to unlock your account for one year."
               />
             </div>
           </div>

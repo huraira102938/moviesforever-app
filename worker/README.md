@@ -81,7 +81,7 @@ defaultConfig {
 ```
 
 Replace the placeholder with the actual deployed URL (must end with `/`), then rebuild
-the APK. Redemption ("Unlock Forever") will now work end-to-end.
+the APK. Redemption ("Unlock for One Year") will now work end-to-end.
 
 ## CORS
 

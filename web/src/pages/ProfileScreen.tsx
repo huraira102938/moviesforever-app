@@ -37,7 +37,7 @@ export default function ProfileScreen() {
             </h2>
             {isUnlocked ? (
               <div className="mt-1">
-                <Badge>Lifetime Member</Badge>
+                <Badge>One Year Member</Badge>
               </div>
             ) : (
               <div className="mt-1">
@@ -79,10 +79,10 @@ export default function ProfileScreen() {
             </div>
             <h3 className="text-white font-bold text-lg mb-2">Unlock to Start Watching</h3>
             <p className="text-gray-400 text-sm mb-5 max-w-sm mx-auto">
-              Get lifetime access to every movie in HD quality with a one-time payment.
+              Get one year access to every movie in HD quality.
             </p>
             <Link to="/lock">
-              <Button>Unlock Forever</Button>
+              <Button>Unlock for One Year</Button>
             </Link>
           </Card>
         )}

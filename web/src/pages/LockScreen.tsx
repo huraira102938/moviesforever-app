@@ -78,7 +78,7 @@ export default function LockScreen() {
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
             Choose how you want to watch
           </h1>
-          <p className="text-gray-400 text-sm">Get lifetime access or explore free content</p>
+          <p className="text-gray-400 text-sm">Get one year access or explore free content</p>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-5 w-full max-w-xl">
@@ -87,12 +87,12 @@ export default function LockScreen() {
               Limited
             </span>
             <div className="mb-4">
-              <h3 className="text-lg font-bold text-white mb-1">Lifetime Access</h3>
+              <h3 className="text-lg font-bold text-white mb-1">One Year Access</h3>
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-black text-brand-400">
                   PKR {pricing?.standardPrice?.toLocaleString() ?? '—'}
                 </span>
-                <span className="text-xs text-gray-500">one-time</span>
+                <span className="text-xs text-gray-500">1 year</span>
               </div>
             </div>
 
@@ -167,7 +167,7 @@ export default function LockScreen() {
         <div className="w-full max-w-xl flex items-center gap-3 px-4 py-3 rounded-xl border border-white/10 bg-white/[0.03]">
           <div className="w-2 h-2 rounded-full bg-brand-400 animate-pulse-dot shrink-0" />
           <p className="text-xs text-gray-400">
-            Enjoy lifetime access with 24/7 WhatsApp verification support.
+            Enjoy one year access with 24/7 WhatsApp verification support.
           </p>
         </div>
       </div>
@@ -202,7 +202,7 @@ export default function LockScreen() {
               loading={redeeming}
               className="flex-1"
             >
-              Unlock Forever
+              Unlock for One Year
             </Button>
             <Button
               variant="ghost"

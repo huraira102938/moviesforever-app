@@ -101,7 +101,7 @@ export default function HomeScreen() {
           <Card className="text-center">
             <h3 className="text-white font-bold text-lg mb-2">Want the full experience?</h3>
             <p className="text-gray-400 text-sm mb-5 max-w-md mx-auto">
-              Unlock lifetime access to every movie in HD quality.
+              Unlock one year access to every movie in HD quality.
             </p>
             <Link to={`/lock`}>
               <Button>
