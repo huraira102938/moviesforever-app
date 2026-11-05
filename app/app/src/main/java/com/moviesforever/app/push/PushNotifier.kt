@@ -21,6 +21,9 @@ object PushNotifier {
     // channel_id the Worker puts in its FCM payload.
     const val CHANNEL_ID = "moviesforever_push"
 
+    // Same key as the data field the Worker sends, so taps open Notifications either way.
+    const val EXTRA_NOTIFICATION_ID = "notificationId"
+
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -43,7 +46,9 @@ object PushNotifier {
         val openApp = PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                .putExtra(EXTRA_NOTIFICATION_ID, "push"),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 

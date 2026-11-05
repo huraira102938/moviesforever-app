@@ -5,6 +5,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -27,7 +28,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.moviesforever.app.data.model.CategoryRules
-import com.moviesforever.app.ui.components.UrduErrorDialog
+import com.moviesforever.app.ui.components.ErrorDialog
 import androidx.navigation.navArgument
 import com.moviesforever.app.data.repository.DownloadRequestResult
 import com.moviesforever.app.ui.components.MoviesBottomBar
@@ -55,11 +56,15 @@ import com.moviesforever.app.ui.viewmodel.InstallCheckState
 import com.moviesforever.app.ui.viewmodel.LockViewModel
 import com.moviesforever.app.ui.viewmodel.UnlockCheckState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 @Composable
 fun MoviesForeverNavHost(
     viewModel: AppViewModel,
+    openNotifications: Boolean = false,
+    onNotificationsOpened: () -> Unit = {},
     navController: NavHostController = rememberNavController()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -85,6 +90,16 @@ fun MoviesForeverNavHost(
         }
     }
 
+    // Tapped push: wait until the app is past Splash/Welcome (and not paused), so Back from
+    // Notifications lands on the main tabs.
+    LaunchedEffect(openNotifications) {
+        if (!openNotifications) return@LaunchedEffect
+        val blockedRoutes = setOf(Screen.Splash.route, Screen.Welcome.route, Screen.Paused.route)
+        navController.currentBackStackEntryFlow.first { it.destination.route !in blockedRoutes }
+        navController.navigate(Screen.Notifications.route) { launchSingleTop = true }
+        onNotificationsOpened()
+    }
+
     Scaffold(
         containerColor = Black,
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -92,7 +107,8 @@ fun MoviesForeverNavHost(
         NavHost(
             navController = navController,
             startDestination = Screen.Splash.route,
-            modifier = Modifier.padding(outerPadding)
+            // Consumed so nothing inside (like the bottom bar) adds the system bar space a second time.
+            modifier = Modifier.padding(outerPadding).consumeWindowInsets(outerPadding)
         ) {
             composable(Screen.Splash.route) {
                 SplashScreen(
@@ -139,7 +155,7 @@ fun MoviesForeverNavHost(
                     }
                 }
 
-                // Wrong code / username etc.: shown as a dialog in Urdu, not a quick snackbar.
+                // Wrong code / username etc.: shown as a dialog, not a quick snackbar.
                 var redeemErrorMessage by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(lockState.error) {
                     lockState.error?.let {
@@ -148,9 +164,9 @@ fun MoviesForeverNavHost(
                     }
                 }
                 redeemErrorMessage?.let { message ->
-                    UrduErrorDialog(
+                    ErrorDialog(
                         message = message,
-                        title = "کوڈ قبول نہیں ہوا",
+                        title = "Code accept nahi hua",
                         onDismiss = { redeemErrorMessage = null }
                     )
                 }
@@ -164,11 +180,11 @@ fun MoviesForeverNavHost(
                         if (supportNumber.isBlank()) {
                             Toast.makeText(
                                 context,
-                                "Support WhatsApp number isn't set up yet. Please try again later.",
+                                "Support ka WhatsApp number abhi set nahi hai. Thori der baad try karein.",
                                 Toast.LENGTH_LONG
                             ).show()
                         } else {
-                            val message = "Hi! I have made the payment for MoviesForever Lifetime Access." +
+                            val message = "Assalam o Alaikum! Main ne MoviesForever One Year Access ki payment kar di hai." +
                                     if (referralUsername.isNotBlank()) " Referral Username: $referralUsername" else ""
 
                             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -179,7 +195,7 @@ fun MoviesForeverNavHost(
                     },
                     onRedeemCode = { id, username ->
                         if (id.isBlank() || username.isBlank()) {
-                            redeemErrorMessage = "براہ کرم کوڈ اور یوزرنیم دونوں لکھیں۔"
+                            redeemErrorMessage = "Code aur username dono likhein."
                         } else {
                             lockViewModel.redeem(id, username)
                         }
@@ -198,7 +214,7 @@ fun MoviesForeverNavHost(
                         activity?.finish()
                     } else {
                         backPressedOnce = true
-                        Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Exit ke liye dobara back dabayein", Toast.LENGTH_SHORT).show()
                     }
                 }
 
@@ -222,15 +238,16 @@ fun MoviesForeverNavHost(
                 val catalogueViewModel: CatalogueViewModel = hiltViewModel()
                 val catalogue by catalogueViewModel.state.collectAsState()
                 val shelf = catalogue.shelves.find { it.categoryId == categoryId }
-                // Some categories also pull in others (Bollywood also shows South), mixed together
-                // in a new scattered order each time this screen opens.
+                // Some categories also pull in others (Bollywood also shows South), mixed together.
+                // The shelves already change order on every app launch, so a fixed seed keeps this
+                // list the same when coming back from a movie, until the app is opened again.
                 val browseMovies = remember(catalogue.shelves, categoryId) {
                     val ids = listOf(categoryId) + CategoryRules.SHOW_ALL_ALSO_INCLUDES[categoryId].orEmpty()
                     catalogue.shelves
                         .filter { it.categoryId in ids }
                         .flatMap { it.movies }
                         .distinctBy { it.id }
-                        .shuffled()
+                        .shuffled(Random(categoryId.hashCode()))
                 }
 
                 CategoryBrowseScreen(
@@ -310,14 +327,14 @@ fun MoviesForeverNavHost(
                                 viewModel.downloadMovie(movie) { result ->
                                     when (result) {
                                         DownloadRequestResult.Started -> {
-                                            scope.launch { snackbarHostState.showSnackbar("Download started") }
+                                            scope.launch { snackbarHostState.showSnackbar("Download start ho gaya") }
                                         }
                                         DownloadRequestResult.RequiresUnlock -> {
                                             navController.navigate(Screen.PaymentInstructions.route)
                                         }
                                         DownloadRequestResult.RequiresWifi -> {
                                             scope.launch {
-                                                snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only downloads in Settings")
+                                                snackbarHostState.showSnackbar("Download ke liye WiFi connect karein, ya Settings mein WiFi-only Downloads off karein")
                                             }
                                         }
                                     }

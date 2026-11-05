@@ -1,5 +1,8 @@
 package com.moviesforever.app.ui.screen.player
 
+import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.focusable
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -34,17 +37,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.moviesforever.app.ui.tv.TV_SEEK_STEP_MS
+import com.moviesforever.app.ui.tv.TvPlayerControls
+import com.moviesforever.app.ui.tv.TvPlayerProgress
+import com.moviesforever.app.ui.tv.isTv
+import com.moviesforever.app.ui.tv.tvFocusHighlight
 import androidx.compose.ui.window.Dialog
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -113,15 +126,15 @@ data class ResizeModeOption(
 
 @OptIn(UnstableApi::class)
 private val resizeModeOptions = listOf(
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Fit (show full video)"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom (crop to fill)"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Stretch to fill"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Fixed width"),
-    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Fixed height")
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Fit (full video)"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom (crop)"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Stretch"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Fixed Width"),
+    ResizeModeOption(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Fixed Height")
 )
 
 /**
- * Maps ExoPlayer's PlaybackException error codes to short, easy Urdu messages.
+ * Maps ExoPlayer's PlaybackException error codes to short, easy Roman Urdu messages.
  * The raw error code + name is still shown underneath so a problem report can say exactly
  * which category the failure fell into.
  */
@@ -130,29 +143,29 @@ fun getPlaybackErrorMessage(error: PlaybackException): String {
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
         PlaybackException.ERROR_CODE_TIMEOUT ->
-            "انٹرنیٹ کا مسئلہ ہے۔ انٹرنیٹ چیک کریں اور دوبارہ کوشش کریں۔"
+            "Internet ka masla hai. Internet check kar ke dobara try karein."
         PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
         PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
         PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
         PlaybackException.ERROR_CODE_IO_UNSPECIFIED ->
-            "یہ ویڈیو ابھی نہیں کھل رہی۔ تھوڑی دیر بعد دوبارہ کوشش کریں۔"
+            "Yeh video abhi open nahi ho rahi. Thori der baad try karein."
         PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED ->
-            "ویڈیو کا لنک محفوظ نہیں ہے۔"
+            "Video ka link secure nahi hai."
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
-            "یہ ویڈیو فائل خراب ہے یا سپورٹ نہیں ہوتی۔"
+            "Yeh video file kharab hai ya support nahi hoti."
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FAILED ->
-            "آپ کے فون پر یہ ویڈیو نہیں چل سکتی۔"
+            "Aap ke phone par yeh video nahi chal sakti."
         PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
         PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
         PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
-            "یہ ویڈیو محفوظ ہے اور نہیں چل سکتی۔"
+            "Yeh video protected hai aur nahi chal sakti."
         else ->
-            "ویڈیو نہیں چل سکی۔ دوبارہ کوشش کریں۔"
+            "Video nahi chal saki. Dobara try karein."
     }
 }
 
@@ -210,6 +223,7 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context.findActivity()
+    val isTv = remember { context.isTv() }
 
     var isFullScreenAspect by remember { mutableStateOf(false) }
     var showOverlayControls by remember { mutableStateOf(true) }
@@ -228,6 +242,18 @@ fun PlayerScreen(
     // Video resize / aspect-ratio mode state
     var currentResizeMode by remember { mutableStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var showAspectRatioDialog by remember { mutableStateOf(false) }
+    val anyDialogOpen = showAudioDialog || showSubtitleDialog || showAspectRatioDialog
+
+    // TV remote state: live position for the progress line, every key press restarts the auto-hide
+    // timer, and seeking with the controls hidden briefly shows just the progress line.
+    var isPlaying by remember { mutableStateOf(true) }
+    var positionMs by remember { mutableStateOf(0L) }
+    var durationMs by remember { mutableStateOf(0L) }
+    var remoteKeyPresses by remember { mutableIntStateOf(0) }
+    var hiddenSeeks by remember { mutableIntStateOf(0) }
+    var showSeekProgress by remember { mutableStateOf(false) }
+    val screenFocus = remember { FocusRequester() }
+    val retryFocus = remember { FocusRequester() }
 
     // Playback error / diagnostics state
     var playbackError by remember { mutableStateOf<PlaybackException?>(null) }
@@ -531,15 +557,38 @@ fun PlayerScreen(
     }
 
     // Auto-hide top overlay controls timer
-    LaunchedEffect(showOverlayControls) {
-        if (showOverlayControls) {
-            delay(4000)
+    LaunchedEffect(showOverlayControls, remoteKeyPresses, anyDialogOpen) {
+        if (showOverlayControls && !anyDialogOpen) {
+            delay(if (isTv) 6000 else 4000)
             showOverlayControls = false
         }
     }
 
-    // Handle Orientation Changes
+    // TV: controls hidden means the screen itself must hold focus, or the remote stops working.
+    LaunchedEffect(showOverlayControls, playbackError, gaveUp) {
+        if (isTv && !showOverlayControls && playbackError == null && !gaveUp) screenFocus.requestFocus()
+    }
+
+    LaunchedEffect(exoPlayer) {
+        while (isTv) {
+            isPlaying = exoPlayer.playWhenReady
+            positionMs = exoPlayer.currentPosition
+            durationMs = exoPlayer.duration.coerceAtLeast(0L)
+            delay(500)
+        }
+    }
+
+    LaunchedEffect(hiddenSeeks) {
+        if (hiddenSeeks > 0) {
+            showSeekProgress = true
+            delay(1500)
+            showSeekProgress = false
+        }
+    }
+
+    // Handle Orientation Changes (a TV is always landscape, so never touch it there)
     LaunchedEffect(isFullScreenAspect) {
+        if (isTv) return@LaunchedEffect
         if (isFullScreenAspect) {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
@@ -591,31 +640,104 @@ fun PlayerScreen(
         exoPlayer.playWhenReady = true
     }
 
+    fun seekBy(deltaMs: Long) {
+        val end = if (exoPlayer.duration > 0) exoPlayer.duration else Long.MAX_VALUE
+        exoPlayer.seekTo((exoPlayer.currentPosition + deltaMs).coerceIn(0L, end))
+        positionMs = exoPlayer.currentPosition
+    }
+
+    // First Back only hides the TV controls; the next Back leaves the player.
+    BackHandler(enabled = isTv && showOverlayControls) { showOverlayControls = false }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Black)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                showOverlayControls = !showOverlayControls
-            }
+            .then(
+                if (isTv) {
+                    Modifier
+                        .focusRequester(screenFocus)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                            remoteKeyPresses++
+                            when (event.key) {
+                                Key.MediaPlayPause -> {
+                                    exoPlayer.playWhenReady = !exoPlayer.playWhenReady
+                                    true
+                                }
+                                Key.MediaPlay -> {
+                                    exoPlayer.playWhenReady = true
+                                    true
+                                }
+                                Key.MediaPause -> {
+                                    exoPlayer.playWhenReady = false
+                                    true
+                                }
+                                Key.MediaRewind -> {
+                                    seekBy(-TV_SEEK_STEP_MS)
+                                    hiddenSeeks++
+                                    true
+                                }
+                                Key.MediaFastForward -> {
+                                    seekBy(TV_SEEK_STEP_MS)
+                                    hiddenSeeks++
+                                    true
+                                }
+                                // Once the controls are open, the arrows move between the buttons.
+                                else -> when {
+                                    showOverlayControls || playbackError != null || gaveUp -> false
+                                    event.key == Key.DirectionLeft -> {
+                                        seekBy(-TV_SEEK_STEP_MS)
+                                        hiddenSeeks++
+                                        true
+                                    }
+                                    event.key == Key.DirectionRight -> {
+                                        seekBy(TV_SEEK_STEP_MS)
+                                        hiddenSeeks++
+                                        true
+                                    }
+                                    event.key == Key.DirectionCenter || event.key == Key.Enter ||
+                                            event.key == Key.NumPadEnter ||
+                                            event.key == Key.DirectionUp || event.key == Key.DirectionDown -> {
+                                        showOverlayControls = true
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            }
+                        }
+                        .focusable()
+                } else {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        showOverlayControls = !showOverlayControls
+                    }
+                }
+            )
     ) {
         // Native ExoPlayer View
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
-                    useController = true
+                    // On TV this view must never take the remote's focus: TvPlayerControls is used instead.
+                    useController = !isTv
+                    if (isTv) {
+                        isFocusable = false
+                        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    }
                     setShowNextButton(false)
                     setShowPreviousButton(false)
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
                     resizeMode = currentResizeMode
                     controllerShowTimeoutMs = 3000
                     keepScreenOn = true
-                    setOnClickListener {
-                        showOverlayControls = !showOverlayControls
+                    if (!isTv) {
+                        setOnClickListener {
+                            showOverlayControls = !showOverlayControls
+                        }
                     }
                 }
             },
@@ -629,9 +751,42 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
+        if (isTv && showOverlayControls && playbackError == null && !gaveUp) {
+            TvPlayerControls(
+                title = title,
+                isPlaying = isPlaying,
+                positionMs = positionMs,
+                durationMs = durationMs,
+                showAudio = availableAudioTracks.size > 1,
+                showSubtitles = availableSubtitles.isNotEmpty(),
+                subtitlesOn = subtitlesEnabled,
+                videoFitChanged = currentResizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT,
+                dialogOpen = anyDialogOpen,
+                onPlayPause = { exoPlayer.playWhenReady = !exoPlayer.playWhenReady },
+                onSeekBy = ::seekBy,
+                onVideoFit = { showAspectRatioDialog = true },
+                onAudio = { showAudioDialog = true },
+                onSubtitles = {
+                    if (availableSubtitles.size > 1) {
+                        showSubtitleDialog = true
+                    } else {
+                        toggleSubtitles(!subtitlesEnabled)
+                    }
+                }
+            )
+        } else if (isTv && showSeekProgress) {
+            TvPlayerProgress(
+                positionMs = positionMs,
+                durationMs = durationMs,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 48.dp, vertical = 27.dp)
+            )
+        }
+
         // Custom Top Overlay Bar
         AnimatedVisibility(
-            visible = showOverlayControls,
+            visible = !isTv && showOverlayControls,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -697,7 +852,7 @@ fun PlayerScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.AspectRatio,
-                                contentDescription = "Aspect Ratio",
+                                contentDescription = "Video Fit",
                                 tint = if (currentResizeMode != AspectRatioFrameLayout.RESIZE_MODE_FIT) Gold else TextPrimary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -766,7 +921,7 @@ fun PlayerScreen(
                                 } else {
                                     Icons.Filled.Fullscreen
                                 },
-                                contentDescription = "Toggle Landscape Mode",
+                                contentDescription = "Rotate Screen",
                                 tint = TextPrimary,
                                 modifier = Modifier.size(22.dp)
                             )
@@ -779,92 +934,93 @@ fun PlayerScreen(
         // "Internet is slow" notice: shown while buffering has had no new data for a few seconds,
         // so the viewer knows the app is still trying and has not frozen.
         if (stalledSeconds >= STALL_NOTICE_AFTER_SECONDS && playbackError == null && !gaveUp) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 72.dp, start = 24.dp, end = 24.dp)
-                        .background(Black.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                ) {
-                    Text(
-                        text = "انٹرنیٹ سست ہے۔ ویڈیو لوڈ ہو رہی ہے، تھوڑا انتظار کریں…",
-                        color = TextPrimary,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 72.dp, start = 24.dp, end = 24.dp)
+                    .background(Black.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "Internet slow hai. Video load ho rahi hai, thora wait karein…",
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center
+                )
             }
         }
 
         // Error / gave-up screen: instead of a spinner that never ends, say what happened in
-        // simple Urdu and offer Retry. The raw error code stays visible for problem reports.
+        // simple Roman Urdu and offer Retry. The raw error code stays visible for problem reports.
         if (playbackError != null || gaveUp) {
             val error = playbackError
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Black.copy(alpha = 0.92f))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) { /* swallow taps */ },
-                    contentAlignment = Alignment.Center
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Black.copy(alpha = 0.92f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* swallow taps */ },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier.padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Text(
+                        text = "Video nahi chal rahi",
+                        color = TextPrimary,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = if (error != null) getPlaybackErrorMessage(error)
+                        else "Video load nahi ho saki. Internet check kar ke dobara try karein.",
+                        color = TextPrimary.copy(alpha = 0.85f),
+                        fontSize = 15.sp,
+                        lineHeight = 26.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    if (error != null) {
+                        Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "ویڈیو نہیں چل رہی",
-                            color = TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = if (error != null) getPlaybackErrorMessage(error)
-                            else "ویڈیو لوڈ نہیں ہو سکی۔ اپنا انٹرنیٹ چیک کریں اور دوبارہ کوشش کریں۔",
-                            color = TextPrimary.copy(alpha = 0.85f),
-                            fontSize = 15.sp,
-                            lineHeight = 26.sp,
+                            text = "Error code: ${error.errorCode} (${error.errorCodeName})",
+                            color = TextPrimary.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
                             textAlign = TextAlign.Center
                         )
-                        if (error != null) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Error code: ${error.errorCode} (${error.errorCodeName})",
-                                color = TextPrimary.copy(alpha = 0.5f),
-                                fontSize = 11.sp,
-                                textAlign = TextAlign.Center
-                            )
-                            error.cause?.message?.let { causeMessage ->
-                                if (BuildConfig.DEBUG) {
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = causeMessage,
-                                        color = TextPrimary.copy(alpha = 0.4f),
-                                        fontSize = 10.sp,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                        error.cause?.message?.let { causeMessage ->
+                            if (BuildConfig.DEBUG) {
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = causeMessage,
+                                    color = TextPrimary.copy(alpha = 0.4f),
+                                    fontSize = 10.sp,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
-                        Spacer(Modifier.height(20.dp))
-                        Row {
-                            Button(
-                                onClick = { retryPlayback() },
-                                colors = ButtonDefaults.buttonColors(containerColor = Gold)
-                            ) {
-                                Text("دوبارہ کوشش کریں", color = Black)
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            OutlinedButton(onClick = onBack) {
-                                Text("واپس جائیں", color = TextPrimary)
-                            }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Row {
+                        LaunchedEffect(Unit) { if (isTv) retryFocus.requestFocus() }
+                        Button(
+                            onClick = { retryPlayback() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Gold),
+                            modifier = Modifier.focusRequester(retryFocus).tvFocusHighlight(CircleShape)
+                        ) {
+                            Text("Try Again", color = Black)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedButton(
+                            onClick = onBack,
+                            modifier = Modifier.tvFocusHighlight(CircleShape)
+                        ) {
+                            Text("Go Back", color = TextPrimary)
                         }
                     }
                 }
@@ -873,180 +1029,106 @@ fun PlayerScreen(
 
         // Audio Track Selection Dialog
         if (showAudioDialog) {
-            Dialog(onDismissRequest = { showAudioDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = "Audio Language",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        availableAudioTracks.forEachIndexed { index, track ->
-                            if (index > 0) {
-                                HorizontalDivider(color = DarkElevated)
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectAudioTrack(track)
-                                        showAudioDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = selectedAudioTrack == track || (selectedAudioTrack == null && index == 0),
-                                    onClick = {
-                                        selectAudioTrack(track)
-                                        showAudioDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(track.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            }
+            PlayerOptionDialog(
+                title = "Audio Language",
+                options = availableAudioTracks.map { it.label },
+                selectedIndex = availableAudioTracks.indexOf(selectedAudioTrack).coerceAtLeast(0),
+                onSelect = { index ->
+                    selectAudioTrack(availableAudioTracks[index])
+                    showAudioDialog = false
+                },
+                onDismiss = { showAudioDialog = false }
+            )
         }
 
-        // Subtitle Selection Dialog
+        // Subtitle Selection Dialog (first row is "Off")
         if (showSubtitleDialog) {
-            Dialog(onDismissRequest = { showSubtitleDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            text = "Subtitle Language",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    toggleSubtitles(false)
-                                    showSubtitleDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = !subtitlesEnabled,
-                                onClick = {
-                                    toggleSubtitles(false)
-                                    showSubtitleDialog = false
-                                },
-                                colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Off", color = TextPrimary, fontSize = 14.sp)
-                        }
-
-                        HorizontalDivider(color = DarkElevated)
-
-                        availableSubtitles.forEach { track ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        toggleSubtitles(true, track)
-                                        showSubtitleDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = subtitlesEnabled && (selectedSubtitleTrack == track || selectedSubtitleTrack == null && track == availableSubtitles.firstOrNull()),
-                                    onClick = {
-                                        toggleSubtitles(true, track)
-                                        showSubtitleDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(track.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
-
-                    }
-                }
-            }
+            PlayerOptionDialog(
+                title = "Subtitle Language",
+                options = listOf("Off") + availableSubtitles.map { it.label },
+                selectedIndex = if (subtitlesEnabled) {
+                    availableSubtitles.indexOf(selectedSubtitleTrack).coerceAtLeast(0) + 1
+                } else {
+                    0
+                },
+                onSelect = { index ->
+                    if (index == 0) toggleSubtitles(false) else toggleSubtitles(true, availableSubtitles[index - 1])
+                    showSubtitleDialog = false
+                },
+                onDismiss = { showSubtitleDialog = false }
+            )
         }
 
         // Aspect Ratio / Resize Mode Selection Dialog
         if (showAspectRatioDialog) {
-            Dialog(onDismissRequest = { showAspectRatioDialog = false }) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(DarkSurface, RoundedCornerShape(16.dp))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.verticalScroll(rememberScrollState())
+            PlayerOptionDialog(
+                title = "Video Fit",
+                options = resizeModeOptions.map { it.label },
+                selectedIndex = resizeModeOptions.indexOfFirst { it.mode == currentResizeMode }.coerceAtLeast(0),
+                onSelect = { index ->
+                    currentResizeMode = resizeModeOptions[index].mode
+                    showAspectRatioDialog = false
+                },
+                onDismiss = { showAspectRatioDialog = false }
+            )
+        }
+    }
+}
+
+/** One-choice list used by the audio, subtitle and video fit pickers. Works with touch and the TV remote. */
+@Composable
+private fun PlayerOptionDialog(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val selectedFocus = remember { FocusRequester() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        // Inside the Dialog: its rows only exist once the dialog window has composed.
+        LaunchedEffect(Unit) { selectedFocus.requestFocus() }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 400.dp)
+                .background(DarkSurface, RoundedCornerShape(16.dp))
+                .padding(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = title,
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                options.forEachIndexed { index, label ->
+                    if (index > 0) {
+                        HorizontalDivider(color = DarkElevated)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (index == selectedIndex) Modifier.focusRequester(selectedFocus) else Modifier)
+                            .tvFocusHighlight(focusedScale = 1.02f)
+                            .clickable { onSelect(index) }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Video Fit",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
+                        RadioButton(
+                            selected = index == selectedIndex,
+                            onClick = null, // the whole row is the button
+                            colors = RadioButtonDefaults.colors(selectedColor = Gold)
                         )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        resizeModeOptions.forEachIndexed { index, option ->
-                            if (index > 0) {
-                                HorizontalDivider(color = DarkElevated)
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        currentResizeMode = option.mode
-                                        showAspectRatioDialog = false
-                                    }
-                                    .padding(vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                RadioButton(
-                                    selected = currentResizeMode == option.mode,
-                                    onClick = {
-                                        currentResizeMode = option.mode
-                                        showAspectRatioDialog = false
-                                    },
-                                    colors = RadioButtonDefaults.colors(selectedColor = Gold)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(option.label, color = TextPrimary, fontSize = 14.sp)
-                            }
-                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, color = TextPrimary, fontSize = 14.sp)
                     }
                 }
             }

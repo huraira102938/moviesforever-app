@@ -81,7 +81,7 @@ fun ReferralScreen(
                         IconButton(
                             onClick = {
                                 clipboard.setText(AnnotatedString(username))
-                                Toast.makeText(context, "Username copied!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Username copy ho gaya!", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.size(28.dp)
                         ) {
@@ -95,7 +95,7 @@ fun ReferralScreen(
                     }
                     Spacer(Modifier.height(16.dp))
                     GoldButton(
-                        text = "Share App & Earn Money",
+                        text = "App Share Karein",
                         enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
                         onClick = {
                             appShareLink?.let { link ->
@@ -112,8 +112,8 @@ fun ReferralScreen(
             // How your friend gets you credit
             InfoCard(
                 icon = Icons.Filled.Info,
-                title = "Tell your friend this",
-                body = "When your friend sends their payment screenshot to admin, remind them to also send your username \"$username\" as their referral — that's the only way you get credited for it."
+                title = "Dost Ko Yeh Batayein",
+                body = "Jab aap ka dost admin ko payment ka screenshot bheje, to use yaad dilayein ke referral mein aap ka username \"$username\" bhi bheje — tabhi aap ko credit milega."
             )
 
             Spacer(Modifier.height(16.dp))
@@ -131,7 +131,7 @@ fun ReferralScreen(
                 Column(Modifier.padding(18.dp)) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         StatBlock(
-                            label = "Referrals done",
+                            label = "Referrals Done",
                             value = "${account?.referralCount ?: 0}",
                             modifier = Modifier.weight(1f)
                         )
@@ -142,7 +142,7 @@ fun ReferralScreen(
                             modifier = Modifier.weight(1f)
                         )
                         StatBlock(
-                            label = "Already sent",
+                            label = "Paid",
                             value = "PKR ${earnings.paidAmount.toInt()}",
                             valueColor = Success,
                             modifier = Modifier.weight(1f)
@@ -152,7 +152,7 @@ fun ReferralScreen(
                     HorizontalDivider(color = DarkElevated)
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        text = "Referral payments usually take 2–3 days to process. If you don't receive your payment after that, please message admin.",
+                        text = "Referral payment mein aam tor par 2–3 din lagte hain. Agar phir bhi na mile to admin ko message karein.",
                         color = TextSecondary,
                         fontSize = 12.5.sp,
                         lineHeight = 18.sp
@@ -163,7 +163,7 @@ fun ReferralScreen(
             Spacer(Modifier.height(20.dp))
 
             // Payout details
-            SectionHeader(title = "Your Payout Details")
+            SectionHeader(title = "Payout Details")
             Spacer(Modifier.height(8.dp))
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
@@ -184,7 +184,7 @@ fun ReferralScreen(
                     )
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        text = "If your payment number or title is wrong, or you want to change it, please contact admin.",
+                        text = "Agar aap ka payment number ya title ghalat hai, ya change karna hai, to admin se contact karein.",
                         color = TextMuted,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
@@ -195,14 +195,14 @@ fun ReferralScreen(
             Spacer(Modifier.height(20.dp))
 
             Text(
-                text = "How it works:\n1. Share your username (or the app link above) with friends.\n2. When they pay, they enter your username as the referral.\n3. Admin verifies & pays you the referral payout.",
+                text = "Kaise kaam karta hai:\n1. Apna username (ya upar wala app link) doston ko share karein.\n2. Payment karte waqt woh aap ka username referral mein dein.\n3. Admin check kar ke aap ko referral payment bhej dega.",
                 color = TextSecondary,
                 fontSize = 14.sp,
                 lineHeight = 22.sp
             )
         } else {
             Text(
-                "Unlock the app to earn from referrals.",
+                "Referrals se earning ke liye app unlock karein.",
                 color = TextSecondary,
                 fontSize = 15.sp
             )

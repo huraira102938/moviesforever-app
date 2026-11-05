@@ -47,14 +47,14 @@ fun CelebrationScreen(
             Text("🎉", fontSize = 64.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                "You're All Set!",
+                "Mubarak Ho!",
                 color = TextPrimary,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Lifetime access unlocked",
+                "One year access unlock ho gaya",
                 color = GoldLight,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
@@ -87,7 +87,7 @@ fun CelebrationScreen(
                         Text("💰", fontSize = 36.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            "Share & Earn Money!",
+                            "Share Karein, Paise Kamayein!",
                             color = Black,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold
@@ -95,16 +95,16 @@ fun CelebrationScreen(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = if (pricing.referralPayout > 0)
-                                "Earn PKR ${pricing.referralPayout.toInt()} for every friend who unlocks MoviesForever."
+                                "Har dost ke MoviesForever unlock karne par PKR ${pricing.referralPayout.toInt()} kamayein."
                             else
-                                "Earn money for every friend who unlocks MoviesForever.",
+                                "Har dost ke MoviesForever unlock karne par paise kamayein.",
                             color = Black.copy(alpha = 0.8f),
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
                         Spacer(Modifier.height(14.dp))
                         GoldButton(
-                            text = "Share App & Earn Money",
+                            text = "App Share Karein",
                             enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
                             onClick = {
                                 appShareLink?.let { link ->

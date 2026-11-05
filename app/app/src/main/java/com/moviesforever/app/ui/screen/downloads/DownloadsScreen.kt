@@ -77,7 +77,7 @@ fun DownloadsScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "My Downloads",
+                    text = "Downloads",
                     color = TextPrimary,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
@@ -123,7 +123,7 @@ fun DownloadsScreen(
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = "Downloads are enabled for Free movies. Unlock Lifetime Access to download the full library.",
+                        text = "Sirf free movies download ho sakti hain. Sari movies ke liye One Year Access unlock karein.",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         lineHeight = 17.sp,
@@ -157,14 +157,14 @@ fun DownloadsScreen(
                     }
                     Spacer(Modifier.height(14.dp))
                     Text(
-                        text = "No downloads yet",
+                        text = "Abhi koi download nahi",
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Download movies to watch offline anytime, even without an internet connection.",
+                        text = "Movies download karein aur internet ke baghair kabhi bhi dekhein.",
                         color = TextMuted,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 32.dp)
@@ -205,7 +205,7 @@ fun DownloadsScreen(
             containerColor = DarkSurface,
             title = {
                 Text(
-                    text = if (pending.wasDownloading) "Cancel download?" else "Remove download?",
+                    text = if (pending.wasDownloading) "Download cancel karein?" else "Download remove karein?",
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold
                 )
@@ -213,9 +213,9 @@ fun DownloadsScreen(
             text = {
                 Text(
                     text = if (pending.wasDownloading) {
-                        "\"${pending.movie.title}\" is still downloading. Cancelling will stop it and delete the partial download."
+                        "\"${pending.movie.title}\" abhi download ho rahi hai. Cancel karne se download ruk jayegi aur adhoori file delete ho jayegi."
                     } else {
-                        "\"${pending.movie.title}\" will be removed from your downloads. You'll need to download it again to watch it offline."
+                        "\"${pending.movie.title}\" aap ki downloads se remove ho jayegi. Offline dekhne ke liye dobara download karni hogi."
                     },
                     color = TextSecondary,
                     fontSize = 13.sp

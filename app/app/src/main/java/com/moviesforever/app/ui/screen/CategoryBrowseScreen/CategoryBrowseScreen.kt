@@ -81,7 +81,7 @@ fun CategoryBrowseScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search in $categoryTitle...", color = TextMuted, fontSize = 13.sp) },
+            placeholder = { Text("$categoryTitle mein search karein...", color = TextMuted, fontSize = 13.sp) },
             singleLine = true,
             leadingIcon = {
                 Icon(
@@ -131,7 +131,7 @@ fun CategoryBrowseScreen(
                         modifier = Modifier.size(56.dp)
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text("No movies found", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Koi movie nahi mili", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         } else {

@@ -77,7 +77,7 @@ fun ProfileScreen(
                     .background(Gold, RoundedCornerShape(2.dp))
             )
             Spacer(Modifier.width(8.dp))
-            Text("My Profile", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("Profile", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -105,7 +105,7 @@ fun ProfileScreen(
             Spacer(Modifier.height(12.dp))
 
             Text(
-                text = unlockInfo?.username ?: "Free Preview User",
+                text = unlockInfo?.username ?: "Free Account",
                 color = TextPrimary,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -120,7 +120,7 @@ fun ProfileScreen(
                     border = androidx.compose.foundation.BorderStroke(1.dp, Gold)
                 ) {
                     Text(
-                        text = "⭐ Lifetime Member",
+                        text = "⭐ One Year Member",
                         color = Gold,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -177,9 +177,9 @@ fun ProfileScreen(
 
                         Text(
                             text = if (pricing.referralPayout > 0)
-                                "Earn PKR ${pricing.referralPayout.toInt()} for every friend who unlocks!"
+                                "Har dost ke unlock karne par PKR ${pricing.referralPayout.toInt()} kamayein!"
                             else
-                                "Earn money for every friend who unlocks!",
+                                "Har dost ke unlock karne par paise kamayein!",
                             color = Black,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
@@ -189,7 +189,7 @@ fun ProfileScreen(
                         Spacer(Modifier.height(6.dp))
 
                         Text(
-                            text = "Share your referral username below — when a friend unlocks with your handle, you get paid.",
+                            text = "Neeche wala referral username share karein — jab dost is se unlock karega, aap ko paise milenge.",
                             color = Black.copy(alpha = 0.8f),
                             fontSize = 12.sp,
                             lineHeight = 16.sp
@@ -216,7 +216,7 @@ fun ProfileScreen(
                                 onClick = {
                                     unlockInfo?.username?.let { username ->
                                         clipboard.setText(AnnotatedString(username))
-                                        Toast.makeText(context, "Username copied!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Username copy ho gaya!", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             ) {
@@ -232,7 +232,7 @@ fun ProfileScreen(
                         Spacer(Modifier.height(14.dp))
 
                         GoldButton(
-                            text = "Share App & Earn Money",
+                            text = "App Share Karein",
                             enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
                             onClick = {
                                 appShareLink?.let { link ->
@@ -278,7 +278,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth()) {
                         MiniStat(
-                            label = "Referred",
+                            label = "Referrals",
                             value = "${account?.referralCount ?: 0}",
                             modifier = Modifier.weight(1f)
                         )
@@ -364,7 +364,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "Unlock to Start Earning!",
+                        text = "Earning Ke Liye Unlock Karein!",
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
@@ -374,7 +374,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(6.dp))
 
                     Text(
-                        text = "Members earn rewards every time a friend unlocks through their referral username.",
+                        text = "Jab bhi koi dost aap ke referral username se unlock kare, aap ko reward milta hai.",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -387,7 +387,7 @@ fun ProfileScreen(
                         text = if (pricing.standardPrice > 0)
                             "Unlock for PKR ${pricing.standardPrice.toInt()}"
                         else
-                            "Unlock Lifetime Access",
+                            "Unlock One Year Access",
                         onClick = onUnlockClick,
                         modifier = Modifier.fillMaxWidth()
                     )

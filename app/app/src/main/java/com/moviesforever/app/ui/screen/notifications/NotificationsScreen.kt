@@ -83,14 +83,14 @@ fun NotificationsScreen(
                     )
                 }
                 Text(
-                    text = "No notifications yet",
+                    text = "Abhi koi notification nahi",
                     color = TextPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 16.dp)
                 )
                 Text(
-                    text = "You'll see updates here whenever there's something new.",
+                    text = "Jab bhi kuch naya hoga, yahan nazar aayega.",
                     color = TextMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 6.dp)

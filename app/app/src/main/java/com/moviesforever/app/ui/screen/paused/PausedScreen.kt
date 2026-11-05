@@ -107,7 +107,7 @@ fun PausedScreen(note: String) {
                 }
             } else {
                 Text(
-                    text = "Your account's streaming access has been paused. Please contact support for more details.",
+                    text = "Aap ke account ki streaming pause kar di gayi hai. Details ke liye support se contact karein.",
                     color = TextMuted,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,

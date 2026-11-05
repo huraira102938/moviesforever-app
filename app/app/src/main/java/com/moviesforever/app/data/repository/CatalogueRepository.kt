@@ -60,8 +60,13 @@ class CatalogueRepository @Inject constructor(
         const val MAX_BANNERS = 5
     }
 
-    /** New value every time the app process starts -> new random order on every app launch. */
-    private val sessionSeed: Long = System.nanoTime()
+    /** New value on every app launch -> new random order, then stable until the next launch. */
+    @Volatile
+    private var sessionSeed: Long = System.nanoTime()
+
+    /** The last file shown, so a new app launch can re-order it without downloading it again. */
+    @Volatile
+    private var lastFile: CatalogueFile? = null
 
     private sealed class Fetch {
         class Fresh(val file: CatalogueFile) : Fetch()
@@ -83,8 +88,15 @@ class CatalogueRepository @Inject constructor(
         }
     }
 
+    /** Called once per app launch: gives every shelf a new order. */
+    fun reshuffle() {
+        sessionSeed = System.nanoTime()
+        lastFile?.let(::publish)
+    }
+
     /** Groups the file into shelves (one per category, in the admin's category order). */
     private fun publish(file: CatalogueFile) {
+        lastFile = file
         val visible = file.movies.filter { !it.paused }
         val byId = visible.associateBy { it.id }
 

@@ -39,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.moviesforever.app.ui.components.MoviePoster
-import com.moviesforever.app.ui.components.UrduText
 import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
 import kotlinx.coroutines.delay
 
@@ -133,7 +132,7 @@ fun HomeScreen(
             }
         }
 
-        // One shelf per category: shuffled preview (max 5 items) and a "Show All" button
+        // One shelf per category: shuffled preview (max 5 items) and a "Sab Dekhein" button
         catalogue.shelves.filter { it.categoryId !in CategoryRules.HIDDEN_ON_HOME }.forEach { shelf ->
             item(key = "shelf_${shelf.categoryId}") {
                 ModernSectionRow(
@@ -302,7 +301,7 @@ private fun TrendingSection(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "🔥 Trending Now",
+                    text = "🔥Trending",
                     color = TextPrimary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
@@ -372,7 +371,7 @@ private fun TrendingGridTile(
 }
 
 /**
- * Green "FREE" shelf. Green background + green border + a big FREE tag + an Urdu line, so even a
+ * Green free shelf. Green background + green border + a big Free tag + a short line, so even a
  * person who cannot read English understands: these movies are free, everything else is paid.
  */
 @Composable
@@ -401,7 +400,7 @@ private fun FreeSection(
                     .padding(horizontal = 12.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = "FREE",
+                    text = "Free",
                     color = Black,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.ExtraBold
@@ -409,24 +408,18 @@ private fun FreeSection(
             }
             Spacer(Modifier.width(10.dp))
             Text(
-                text = "Free to Watch",
+                text = "Free Movies",
                 color = TextPrimary,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
-            UrduText(
-                text = "مفت",
-                color = Success,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
         }
 
         Spacer(Modifier.height(6.dp))
 
-        UrduText(
-            text = "یہ فلمیں بالکل مفت ہیں۔ باقی تمام فلمیں دیکھنے کے لیے ادائیگی کرنا ضروری ہے۔",
+        Text(
+            text = "Yeh movies bilkul free hain. Baqi sari movies ke liye payment zaroori hai.",
             color = TextSecondary,
             fontSize = 13.sp,
             modifier = Modifier
@@ -479,7 +472,7 @@ private fun ModernSectionRow(
 
             TextButton(onClick = onShowAllClick) {
                 Text(
-                    text = "Show All",
+                    text = "show All",
                     color = Gold,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold

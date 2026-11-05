@@ -72,7 +72,7 @@ fun SearchScreen(
                     .background(Gold, RoundedCornerShape(2.dp))
             )
             Spacer(Modifier.width(8.dp))
-            Text("Search Catalog", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("All Movies", color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -87,7 +87,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search movies, anime, shows...", color = TextMuted, fontSize = 13.sp) },
+            placeholder = { Text("Movies, anime, shows search karein...", color = TextMuted, fontSize = 13.sp) },
             singleLine = true,
             leadingIcon = {
                 Icon(
@@ -206,9 +206,9 @@ fun SearchScreen(
                         modifier = Modifier.size(56.dp)
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text("No movies found", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Koi movie nahi mili", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    Text("Try checking your keywords or filters", color = TextMuted, fontSize = 12.sp)
+                    Text("Keywords ya filter change kar ke dekhein", color = TextMuted, fontSize = 12.sp)
                 }
             }
         } else {

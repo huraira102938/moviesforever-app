@@ -62,7 +62,7 @@ fun MoviePoster(
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "FREE",
+                        text = "Free",
                         color = Color.Black,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold

@@ -70,7 +70,7 @@ fun WelcomeScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                text = "Your one-time pass to unlimited entertainment.",
+                text = "One year pass, unlimited entertainment.",
                 color = TextMuted,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
