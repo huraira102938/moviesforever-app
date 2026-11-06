@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.moviesforever.app.data.model.ContactDetails
@@ -263,7 +264,7 @@ fun PaymentInstructionsScreen(
                         modifier = Modifier.fillMaxWidth().then(showWholeCard),
                         label = { Text("Code") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrect = false, imeAction = ImeAction.Next),
                         shape = RoundedCornerShape(12.dp),
                         colors = textFieldColors()
                     )
@@ -274,7 +275,7 @@ fun PaymentInstructionsScreen(
                         modifier = Modifier.fillMaxWidth().then(showWholeCard),
                         label = { Text("Username") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, autoCorrect = false, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = {
                             focusManager.clearFocus()
                             onRedeemCode(codeId, signInUsername)

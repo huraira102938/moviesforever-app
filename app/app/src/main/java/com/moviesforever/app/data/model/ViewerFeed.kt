@@ -34,7 +34,7 @@ private const val TOP_RATED_FROM = 7.5
 private const val MIN_MOVIES_FOR_GENRE_ROW = 6
 private const val MOVIES_PER_HOME_ROW = 12
 private const val MIN_MOVIES_FOR_HOME_ROW = 4
-private const val TRENDING_ON_HOME = 9
+private const val TRENDING_ON_HOME = 10
 
 /** Earlier shelves keep a movie, later ones skip it. A shelf left too short is dropped from Home. */
 private fun uniqueHomeRows(rows: List<FeedRow>, alreadyShown: List<Movie>): List<FeedRow> {
