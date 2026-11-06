@@ -27,7 +27,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.moviesforever.app.data.model.CategoryRules
 import com.moviesforever.app.ui.components.ErrorDialog
 import androidx.navigation.navArgument
 import com.moviesforever.app.data.repository.DownloadRequestResult
@@ -58,7 +57,6 @@ import com.moviesforever.app.ui.viewmodel.UnlockCheckState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 @Composable
 fun MoviesForeverNavHost(
@@ -231,28 +229,17 @@ fun MoviesForeverNavHost(
             }
 
             composable(
-                route = "category_browse/{categoryId}",
-                arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
+                route = "category_browse/{rowId}",
+                arguments = listOf(navArgument("rowId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: ""
+                val rowId = backStackEntry.arguments?.getString("rowId") ?: ""
                 val catalogueViewModel: CatalogueViewModel = hiltViewModel()
-                val catalogue by catalogueViewModel.state.collectAsState()
-                val shelf = catalogue.shelves.find { it.categoryId == categoryId }
-                // Some categories also pull in others (Bollywood also shows South), mixed together.
-                // The shelves already change order on every app launch, so a fixed seed keeps this
-                // list the same when coming back from a movie, until the app is opened again.
-                val browseMovies = remember(catalogue.shelves, categoryId) {
-                    val ids = listOf(categoryId) + CategoryRules.SHOW_ALL_ALSO_INCLUDES[categoryId].orEmpty()
-                    catalogue.shelves
-                        .filter { it.categoryId in ids }
-                        .flatMap { it.movies }
-                        .distinctBy { it.id }
-                        .shuffled(Random(categoryId.hashCode()))
-                }
+                val feed by catalogueViewModel.feed.collectAsState()
+                val row = feed.rows.find { it.id == rowId }
 
                 CategoryBrowseScreen(
-                    categoryTitle = shelf?.title.orEmpty(),
-                    movies = browseMovies,
+                    categoryTitle = row?.title.orEmpty(),
+                    movies = row?.movies.orEmpty(),
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
@@ -440,6 +427,7 @@ private fun MainScaffoldWithTabs(
     val context = LocalContext.current
     val catalogueViewModel: CatalogueViewModel = hiltViewModel()
     val catalogue by catalogueViewModel.state.collectAsState()
+    val feed by catalogueViewModel.feed.collectAsState()
     val searchCategories = remember(catalogue.shelves) {
         catalogue.shelves.map { Category(id = it.categoryId, name = it.title) }
     }
@@ -454,7 +442,7 @@ private fun MainScaffoldWithTabs(
         Box(modifier = Modifier.padding(paddingValues)) {
             when (currentTab) {
                 0 -> HomeScreen(
-                    banners = catalogue.banners,
+                    feed = feed,
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->
@@ -465,8 +453,8 @@ private fun MainScaffoldWithTabs(
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
-                    onShowAllClick = { categoryId ->
-                        navController.navigate("category_browse/$categoryId")
+                    onShowAllClick = { rowId ->
+                        navController.navigate("category_browse/$rowId")
                     },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
                     onAvatarClick = { onTabSelected(3) }

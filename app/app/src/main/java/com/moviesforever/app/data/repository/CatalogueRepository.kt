@@ -1,5 +1,10 @@
 package com.moviesforever.app.data.repository
 
+import com.moviesforever.app.data.model.Genre
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import android.content.Context
 import com.google.gson.Gson
 import com.moviesforever.app.data.model.Banner
@@ -39,8 +44,13 @@ import kotlin.random.Random
  */
 @Singleton
 class CatalogueRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    genresRepository: GenresRepository
 ) {
+    /** Names for the ids in each movie's `genres`. Kept here so every screen already has them. */
+    val genres: StateFlow<List<Genre>> = genresRepository.observeGenres()
+        .stateIn(CoroutineScope(SupervisorJob() + Dispatchers.Default), SharingStarted.Eagerly, emptyList())
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -114,8 +124,8 @@ class CatalogueRepository @Inject constructor(
 
         _state.value = CatalogueState(
             shelves = shelves,
-            // All trending movies, in a different scattered order on every app launch.
-            trending = file.trending.mapNotNull { byId[it] }.shuffled(Random(sessionSeed + 7919)),
+            // Kept in the admin's order: Home numbers these as a Top 10.
+            trending = file.trending.mapNotNull { byId[it] },
             // Shuffled once per app launch, so Search shows a new scattered order every time the app is opened.
             all = visible.shuffled(Random(sessionSeed + 31)),
             banners = file.banners,

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -29,7 +30,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
-import com.moviesforever.app.data.model.CategoryRules
+import com.moviesforever.app.data.model.FeedRow
+import com.moviesforever.app.data.model.HomeFeed
+import com.moviesforever.app.ui.tv.tvFocusHighlight
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.theme.*
@@ -37,27 +40,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.moviesforever.app.ui.components.MoviePoster
-import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
 import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
-    banners: List<Banner>,
+    feed: HomeFeed,
     pricing: PricingSettings,
     isUnlocked: Boolean,
     onBannerClick: (Banner) -> Unit,
     onMovieClick: (Movie) -> Unit,
     onShowAllClick: (String) -> Unit,
     onUnlockClick: () -> Unit,
-    onAvatarClick: () -> Unit,
-    catalogueViewModel: CatalogueViewModel = hiltViewModel()
+    onAvatarClick: () -> Unit
 ) {
-    // Shelves come from movies.json (one per category, in the admin's category order),
-    // shuffled once per app launch (stable until the app is closed).
-    val catalogue by catalogueViewModel.state.collectAsState()
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -106,23 +102,22 @@ fun HomeScreen(
         }
 
         // Hero Banner Carousel (tap action comes from the admin panel: movie / website / WhatsApp / channel)
-        if (banners.isNotEmpty()) {
+        if (feed.banners.isNotEmpty()) {
             item {
-                ModernBannerCarousel(banners = banners, onBannerClick = onBannerClick)
+                ModernBannerCarousel(banners = feed.banners, onBannerClick = onBannerClick)
                 Spacer(Modifier.height(16.dp))
             }
         }
 
         // FREE section: shown first, only to people who have NOT paid. Once premium, it disappears.
-        val freeMovies = catalogue.all.filter { it.isFree }
-        if (!isUnlocked && freeMovies.isNotEmpty()) {
+        if (!isUnlocked && feed.free.isNotEmpty()) {
             item(key = "free_section") {
-                FreeSection(movies = freeMovies, onMovieClick = onMovieClick)
+                FreeSection(movies = feed.free, onMovieClick = onMovieClick)
                 Spacer(Modifier.height(12.dp))
             }
         }
 
-        if (!isUnlocked) {
+        if (!isUnlocked && pricing.note.isNotBlank()) {
             item {
                 ModernOfferBanner(
                     note = pricing.note,
@@ -132,25 +127,52 @@ fun HomeScreen(
             }
         }
 
-        // One shelf per category: shuffled preview (max 5 items) and a "Sab Dekhein" button
-        catalogue.shelves.filter { it.categoryId !in CategoryRules.HIDDEN_ON_HOME }.forEach { shelf ->
-            item(key = "shelf_${shelf.categoryId}") {
-                ModernSectionRow(
-                    title = shelf.title,
-                    movies = shelf.movies.take(5),
-                    onMovieClick = onMovieClick,
-                    onShowAllClick = { onShowAllClick(shelf.categoryId) }
+        if (feed.trending.isNotEmpty()) {
+            item(key = "shelf_trending") {
+                TrendingSection(
+                    movies = feed.trending,
+                    onMovieClick = onMovieClick
                 )
             }
         }
 
-        if (catalogue.trending.isNotEmpty()) {
-            item(key = "shelf_trending") {
-                TrendingSection(
-                    movies = catalogue.trending.take(9), // only 9; the list is already scattered differently on every app launch
-                    onMovieClick = onMovieClick
-                )
+        if (feed.genreRows.isNotEmpty()) {
+            item(key = "genre_pills") {
+                GenrePills(rows = feed.genreRows, onClick = { onShowAllClick(it.id) })
             }
+        }
+
+        items(feed.homeRows, key = { it.id }) { row ->
+            ModernSectionRow(
+                title = row.title,
+                movies = row.movies,
+                onMovieClick = onMovieClick,
+                onShowAllClick = { onShowAllClick(row.id) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenrePills(rows: List<FeedRow>, onClick: (FeedRow) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(rows, key = { it.id }) { row ->
+            Text(
+                text = row.title,
+                color = TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .tvFocusHighlight(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(DarkSurface)
+                    .border(1.dp, DarkElevated, RoundedCornerShape(20.dp))
+                    .clickable { onClick(row) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
         }
     }
 }
@@ -281,156 +303,87 @@ private fun ModernOfferBanner(note: String, onClick: () -> Unit) {
 }
 
 @Composable
+private fun SectionTitle(title: String, subtitle: String? = null) {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 4.dp, height = 16.dp)
+                .background(Gold, RoundedCornerShape(2.dp))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(text = title, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        subtitle?.let {
+            Spacer(Modifier.width(8.dp))
+            Text(text = it, color = TextMuted, fontSize = 13.sp)
+        }
+    }
+}
+
+/** A numbered Top 10 row: each big number sits fully beside its poster. */
+@Composable
 private fun TrendingSection(
     movies: List<Movie>,
     onMovieClick: (Movie) -> Unit
 ) {
     Column(modifier = Modifier.padding(vertical = 12.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 4.dp, height = 16.dp)
-                        .background(Gold, RoundedCornerShape(2.dp))
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "🔥Trending",
-                    color = TextPrimary,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-
+        SectionTitle("Top 10 This Week")
         Spacer(Modifier.height(12.dp))
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            movies.chunked(3).forEach { rowMovies ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    rowMovies.forEach { movie ->
-                        TrendingGridTile(
-                            movie = movie,
-                            onClick = { onMovieClick(movie) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    repeat(3 - rowMovies.size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
+            itemsIndexed(movies, key = { _, movie -> movie.id }) { index, movie ->
+                TrendingTile(rank = index + 1, movie = movie, onClick = { onMovieClick(movie) })
             }
         }
     }
 }
 
 @Composable
-private fun TrendingGridTile(
-    movie: Movie,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.clickable(onClick = onClick)) {
-        Box(
+private fun TrendingTile(rank: Int, movie: Movie, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .tvFocusHighlight(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        Text(
+            text = "$rank",
+            color = Gold,
+            fontSize = 72.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 72.sp,
+            maxLines = 1,
+            softWrap = false
+        )
+        Spacer(Modifier.width(4.dp))
+        AsyncImage(
+            model = movie.thumbnailUrl,
+            contentDescription = movie.title,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
+                .width(120.dp)
+                .height(180.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(DarkSurface)
-        ) {
-            AsyncImage(
-                model = movie.thumbnailUrl,
-                contentDescription = movie.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = movie.title,
-            color = TextMuted,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1
         )
     }
 }
 
-/**
- * Green free shelf. Green background + green border + a big Free tag + a short line, so even a
- * person who cannot read English understands: these movies are free, everything else is paid.
- */
+/** Free movies sit in a normal shelf; the Free tag on each poster says the rest. */
 @Composable
 private fun FreeSection(
     movies: List<Movie>,
     onMovieClick: (Movie) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(Success.copy(alpha = 0.10f))
-            .border(1.5.dp, Success, RoundedCornerShape(18.dp))
-            .padding(vertical = 14.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .background(Success, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 12.dp, vertical = 5.dp)
-            ) {
-                Text(
-                    text = "Free",
-                    color = Black,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "Free Movies",
-                color = TextPrimary,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        Text(
-            text = "Yeh movies bilkul free hain. Baqi sari movies ke liye payment zaroori hai.",
-            color = TextSecondary,
-            fontSize = 13.sp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-        )
-
-        Spacer(Modifier.height(10.dp))
-
+    Column(modifier = Modifier.padding(vertical = 12.dp)) {
+        SectionTitle("Watch Free", subtitle = "Koi payment nahi")
+        Spacer(Modifier.height(12.dp))
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(movies, key = { it.id }) { movie ->
@@ -472,7 +425,7 @@ private fun ModernSectionRow(
 
             TextButton(onClick = onShowAllClick) {
                 Text(
-                    text = "show All",
+                    text = "Show All",
                     color = Gold,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
