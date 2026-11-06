@@ -20,7 +20,6 @@ sealed class Screen(val route: String) {
         fun createRoute(movieId: String, trailer: Boolean = false) =
             "player/$movieId?trailer=$trailer"
     }
-    data object Referral : Screen("referral")
     data object Celebration : Screen("celebration")
     data object Settings : Screen("settings")
     data object Paused : Screen("paused")

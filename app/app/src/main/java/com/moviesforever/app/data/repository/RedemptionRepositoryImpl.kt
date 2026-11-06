@@ -46,12 +46,12 @@ class RedemptionRepositoryImpl @Inject constructor(
     }
 
     private companion object {
-        const val MSG_ENTER_BOTH = "Code aur username dono likhein."
-        const val MSG_INVALID = "Yeh code ghalat hai. Code dobara check karein."
-        const val MSG_USED = "Yeh code pehle hi use ho chuka hai."
-        const val MSG_USERNAME_MISMATCH = "Yeh username is code se match nahi karta. Username dobara check karein."
-        const val MSG_SERVER = "Server mein masla hai. Thori der baad try karein."
-        const val MSG_NETWORK = "Internet ka masla hai. Internet check kar ke dobara try karein."
-        const val MSG_GENERIC = "Code ya username sahi nahi hai. Dobara check karein."
+        const val MSG_ENTER_BOTH = "Please enter both your code and username."
+        const val MSG_INVALID = "This code is not valid. Please check it and try again."
+        const val MSG_USED = "This code has already been used."
+        const val MSG_USERNAME_MISMATCH = "This username does not match the code. Please check it and try again."
+        const val MSG_SERVER = "Something went wrong on our side. Please try again later."
+        const val MSG_NETWORK = "Connection problem. Check your internet and try again."
+        const val MSG_GENERIC = "The code or username is not correct. Please check and try again."
     }
 }

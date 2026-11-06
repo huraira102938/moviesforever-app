@@ -17,8 +17,10 @@ import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.Role
+import com.moviesforever.app.ui.tv.tvFocusHighlight
 
 data class BottomTab(
     val label: String,
@@ -34,70 +36,53 @@ object BottomTabs {
     val all = listOf(Home, Search, Downloads, Profile)
 }
 
-/**
- * Golden bottom navigation bar (Netflix-style, tabs at bottom).
- */
+/** Four equal tabs on one line: same icon size, same label position, gold only on the open tab. */
 @Composable
 fun MoviesBottomBar(
     currentTab: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    NavigationBar(
-        containerColor = BlackSurface,
-        contentColor = TextSecondary,
-        modifier = Modifier.height(66.dp)
-    ) {
-        BottomTabs.all.forEachIndexed { index, tab ->
-            // Tab 1 is the movie library / search. It is drawn a little bigger, inside a circle, so
-            // it stands out as "everything is in here". Gold only while it is selected.
-            val isLibrary = index == 1
-            val isSelected = currentTab == index
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = { onTabSelected(index) },
-                icon = {
-                    if (isLibrary) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                // Selected: gold. Not selected: a quiet light-grey disc (no gold), so the
-                                // black icon on top can still be seen on the dark bar.
-                                .background(if (isSelected) Gold else TextSecondary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.label,
-                                tint = Black, // black whether selected or not
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    } else {
+    Column(modifier = Modifier.fillMaxWidth().background(BlackSurface)) {
+        HorizontalDivider(color = DarkElevated)
+        Row(modifier = Modifier.fillMaxWidth().height(64.dp)) {
+            BottomTabs.all.forEachIndexed { index, tab ->
+                val isSelected = currentTab == index
+                val tint = if (isSelected) Gold else TextMuted
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .tvFocusHighlight(RoundedCornerShape(12.dp), focusedScale = 1f)
+                        .selectable(selected = isSelected, role = Role.Tab, onClick = { onTabSelected(index) }),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 56.dp, height = 30.dp)
+                            .background(
+                                if (isSelected) Gold.copy(alpha = 0.15f) else Color.Transparent,
+                                RoundedCornerShape(15.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = tab.icon,
-                            contentDescription = tab.label,
-                            tint = if (isSelected) Gold else TextMuted
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-                },
-                label = {
+                    Spacer(Modifier.height(3.dp))
                     Text(
                         text = tab.label,
-                        // Same as the other tabs: gold only when selected, never bold.
-                        color = if (isSelected) Gold else TextMuted,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Normal
+                        color = tint,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1
                     )
-                },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = if (isLibrary) Color.Transparent else Gold.copy(alpha = 0.15f),
-                    selectedIconColor = Gold,
-                    selectedTextColor = Gold,
-                    unselectedIconColor = TextMuted,
-                    unselectedTextColor = TextMuted
-                )
-            )
+                }
+            }
         }
     }
 }

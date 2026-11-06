@@ -19,6 +19,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -33,30 +38,39 @@ import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import com.moviesforever.app.data.model.AppShareLink
 import com.moviesforever.app.data.model.PricingSettings
-import com.moviesforever.app.data.model.ReferralEarnings
+import com.moviesforever.app.data.remote.Market
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.model.buildShareMessage
+import com.moviesforever.app.data.model.ViewerPreference
 import com.moviesforever.app.ui.components.GoldButton
+import com.moviesforever.app.ui.components.ViewerPreferenceDialog
 import com.moviesforever.app.ui.theme.*
 
 @Composable
 fun ProfileScreen(
     unlockInfo: UnlockInfo?,
     pricing: PricingSettings,
-    account: UserAccount? = null,
-    earnings: ReferralEarnings = ReferralEarnings(),
-    appShareLink: AppShareLink? = null,
-    onShareApk: (String) -> Unit = {},
-    onReferralClick: () -> Unit,
     onSettings: () -> Unit,
     onNotifications: () -> Unit = {},
     notificationCount: Int = 0,
+    preference: ViewerPreference? = null,
+    onPreferenceChange: (ViewerPreference) -> Unit = {},
     onUnlockClick: () -> Unit
 ) {
+    var showPreferenceDialog by remember { mutableStateOf(false) }
+    if (showPreferenceDialog) {
+        ViewerPreferenceDialog(
+            selected = preference,
+            onSelect = {
+                onPreferenceChange(it)
+                showPreferenceDialog = false
+            },
+            onDismiss = { showPreferenceDialog = false }
+        )
+    }
+
     val isUnlocked = unlockInfo != null
-    val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val scrollState = rememberScrollState()
 
     Column(
@@ -146,157 +160,7 @@ fun ProfileScreen(
         Spacer(Modifier.height(20.dp))
 
         if (isUnlocked) {
-            // High-Converting Share & Earn Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.horizontalGradient(listOf(GoldDeep, Gold, GoldLight)),
-                            RoundedCornerShape(18.dp)
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Share,
-                                contentDescription = null,
-                                tint = Black,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text("SHARE & EARN", color = Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            text = if (pricing.referralPayout > 0)
-                                "Har dost ke unlock karne par PKR ${pricing.referralPayout.toInt()} kamayein!"
-                            else
-                                "Har dost ke unlock karne par paise kamayein!",
-                            color = Black,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 22.sp
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            text = "Neeche wala referral username share karein — jab dost is se unlock karega, aap ko paise milenge.",
-                            color = Black.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp
-                        )
-
-                        Spacer(Modifier.height(14.dp))
-
-                        // Referral Code Display (tap the copy icon to copy)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Black.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
-                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "@${unlockInfo?.username ?: ""}",
-                                color = Black,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = {
-                                    unlockInfo?.username?.let { username ->
-                                        clipboard.setText(AnnotatedString(username))
-                                        Toast.makeText(context, "Username copy ho gaya!", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.ContentCopy,
-                                    contentDescription = "Copy username",
-                                    tint = Black,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(14.dp))
-
-                        GoldButton(
-                            text = "App Share Karein",
-                            enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
-                            onClick = {
-                                appShareLink?.let { link ->
-                                    onShareApk(link.buildShareMessage(unlockInfo?.username))
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // My Referrals Row -- with a quick-glance summary so this row
-            // isn't just a bare link; full detail lives on the Referral screen.
-            Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, DarkElevated, RoundedCornerShape(14.dp))
-                    .clickable(onClick = onReferralClick)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Group,
-                            contentDescription = null,
-                            tint = Gold,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text("My Referrals", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.weight(1f))
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowRight,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        MiniStat(
-                            label = "Referrals",
-                            value = "${account?.referralCount ?: 0}",
-                            modifier = Modifier.weight(1f)
-                        )
-                        MiniStat(
-                            label = "Pending",
-                            value = "PKR ${earnings.pendingAmount.toInt()}",
-                            valueColor = Warning,
-                            modifier = Modifier.weight(1f)
-                        )
-                        MiniStat(
-                            label = "Paid",
-                            value = "PKR ${earnings.paidAmount.toInt()}",
-                            valueColor = Success,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
+            PreferenceRow(preference = preference, onClick = { showPreferenceDialog = true })
 
             Spacer(Modifier.height(8.dp))
 
@@ -364,7 +228,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(12.dp))
 
                     Text(
-                        text = "Earning Ke Liye Unlock Karein!",
+                        text = "Unlock Everything",
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
@@ -374,7 +238,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(6.dp))
 
                     Text(
-                        text = "Jab bhi koi dost aap ke referral username se unlock kare, aap ko reward milta hai.",
+                        text = "Watch every movie on your phone and TV, and download them to watch offline.",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,
@@ -385,7 +249,7 @@ fun ProfileScreen(
 
                     GoldButton(
                         text = if (pricing.standardPrice > 0)
-                            "Unlock for PKR ${pricing.standardPrice.toInt()}"
+                            "Unlock for ${Market.CURRENCY} ${pricing.standardPrice.toInt()}"
                         else
                             "Unlock One Year Access",
                         onClick = onUnlockClick,
@@ -395,6 +259,10 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(10.dp))
+
+            PreferenceRow(preference = preference, onClick = { showPreferenceDialog = true })
+
+            Spacer(Modifier.height(8.dp))
 
             NotificationsRow(onClick = onNotifications, count = notificationCount)
 
@@ -430,6 +298,34 @@ fun ProfileScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PreferenceRow(preference: ViewerPreference?, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, DarkElevated, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Language,
+                contentDescription = null,
+                tint = Gold,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Text("What I Watch", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.weight(1f))
+            Text((preference ?: ViewerPreference.ALL).title, color = TextMuted, fontSize = 13.sp)
         }
     }
 }
@@ -482,16 +378,3 @@ private fun NotificationsRow(onClick: () -> Unit, count: Int) {
     }
 }
 
-@Composable
-private fun MiniStat(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-    valueColor: Color = TextPrimary
-) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(2.dp))
-        Text(label, color = TextMuted, fontSize = 10.5.sp)
-    }
-}

@@ -29,7 +29,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.moviesforever.app.R
 import com.moviesforever.app.data.model.Banner
-import com.moviesforever.app.data.model.CategoryRules
+import com.moviesforever.app.data.model.FeedRow
+import com.moviesforever.app.data.model.HomeFeed
+import com.moviesforever.app.ui.tv.tvFocusHighlight
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
 import com.moviesforever.app.ui.theme.*
@@ -37,27 +39,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.moviesforever.app.ui.components.MoviePoster
-import com.moviesforever.app.ui.viewmodel.CatalogueViewModel
 import kotlinx.coroutines.delay
 
 @Composable
 fun HomeScreen(
-    banners: List<Banner>,
+    feed: HomeFeed,
     pricing: PricingSettings,
     isUnlocked: Boolean,
     onBannerClick: (Banner) -> Unit,
     onMovieClick: (Movie) -> Unit,
     onShowAllClick: (String) -> Unit,
     onUnlockClick: () -> Unit,
-    onAvatarClick: () -> Unit,
-    catalogueViewModel: CatalogueViewModel = hiltViewModel()
+    onAvatarClick: () -> Unit
 ) {
-    // Shelves come from movies.json (one per category, in the admin's category order),
-    // shuffled once per app launch (stable until the app is closed).
-    val catalogue by catalogueViewModel.state.collectAsState()
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -106,23 +101,22 @@ fun HomeScreen(
         }
 
         // Hero Banner Carousel (tap action comes from the admin panel: movie / website / WhatsApp / channel)
-        if (banners.isNotEmpty()) {
+        if (feed.banners.isNotEmpty()) {
             item {
-                ModernBannerCarousel(banners = banners, onBannerClick = onBannerClick)
+                ModernBannerCarousel(banners = feed.banners, onBannerClick = onBannerClick)
                 Spacer(Modifier.height(16.dp))
             }
         }
 
         // FREE section: shown first, only to people who have NOT paid. Once premium, it disappears.
-        val freeMovies = catalogue.all.filter { it.isFree }
-        if (!isUnlocked && freeMovies.isNotEmpty()) {
+        if (!isUnlocked && feed.free.isNotEmpty()) {
             item(key = "free_section") {
-                FreeSection(movies = freeMovies, onMovieClick = onMovieClick)
+                FreeSection(movies = feed.free, onMovieClick = onMovieClick)
                 Spacer(Modifier.height(12.dp))
             }
         }
 
-        if (!isUnlocked) {
+        if (!isUnlocked && pricing.note.isNotBlank()) {
             item {
                 ModernOfferBanner(
                     note = pricing.note,
@@ -132,25 +126,52 @@ fun HomeScreen(
             }
         }
 
-        // One shelf per category: shuffled preview (max 5 items) and a "Sab Dekhein" button
-        catalogue.shelves.filter { it.categoryId !in CategoryRules.HIDDEN_ON_HOME }.forEach { shelf ->
-            item(key = "shelf_${shelf.categoryId}") {
-                ModernSectionRow(
-                    title = shelf.title,
-                    movies = shelf.movies.take(5),
-                    onMovieClick = onMovieClick,
-                    onShowAllClick = { onShowAllClick(shelf.categoryId) }
+        if (feed.trending.isNotEmpty()) {
+            item(key = "shelf_trending") {
+                TrendingSection(
+                    movies = feed.trending,
+                    onMovieClick = onMovieClick
                 )
             }
         }
 
-        if (catalogue.trending.isNotEmpty()) {
-            item(key = "shelf_trending") {
-                TrendingSection(
-                    movies = catalogue.trending.take(9), // only 9; the list is already scattered differently on every app launch
-                    onMovieClick = onMovieClick
-                )
+        if (feed.genreRows.isNotEmpty()) {
+            item(key = "genre_pills") {
+                GenrePills(rows = feed.genreRows, onClick = { onShowAllClick(it.id) })
             }
+        }
+
+        items(feed.homeRows, key = { it.id }) { row ->
+            ModernSectionRow(
+                title = row.title,
+                movies = row.movies,
+                onMovieClick = onMovieClick,
+                onShowAllClick = { onShowAllClick(row.id) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun GenrePills(rows: List<FeedRow>, onClick: (FeedRow) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(rows, key = { it.id }) { row ->
+            Text(
+                text = row.title,
+                color = TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .tvFocusHighlight(RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(DarkSurface)
+                    .border(1.dp, DarkElevated, RoundedCornerShape(20.dp))
+                    .clickable { onClick(row) }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
         }
     }
 }
@@ -301,7 +322,7 @@ private fun TrendingSection(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "🔥Trending",
+                    text = "Trending Now",
                     color = TextPrimary,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
@@ -419,7 +440,7 @@ private fun FreeSection(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            text = "Yeh movies bilkul free hain. Baqi sari movies ke liye payment zaroori hai.",
+            text = "These movies are completely free. Unlock One Year Access to watch everything else.",
             color = TextSecondary,
             fontSize = 13.sp,
             modifier = Modifier
@@ -472,7 +493,7 @@ private fun ModernSectionRow(
 
             TextButton(onClick = onShowAllClick) {
                 Text(
-                    text = "show All",
+                    text = "Show All",
                     color = Gold,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold

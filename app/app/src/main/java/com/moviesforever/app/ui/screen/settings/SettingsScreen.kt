@@ -68,7 +68,7 @@ fun SettingsScreen(
                 Column(Modifier.weight(1f)) {
                     Text("WiFi-only Downloads", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        "Movies sirf WiFi par download hon (default off: mobile data par bhi download hota hai)",
+                        "Download only on WiFi (off by default, so downloads also use mobile data)",
                         color = TextMuted,
                         fontSize = 12.sp
                     )
@@ -115,10 +115,10 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Aap ka code sirf aik baar use ho sakta hai. Yahan reset karne se code wapas NAHI " +
-                                "milta -- sirf is device se aap ka access khatam ho jata hai. " +
-                                "Phir app lock ho jayegi, jab tak aap " +
-                                "naya code nahi khareedte.",
+                        "Your code can only be used once. Resetting here does NOT give you a " +
+                                "working code back -- it just removes access from this device. " +
+                                "You would stay locked out unless you " +
+                                "buy a new code.",
                         color = TextMuted,
                         fontSize = 12.sp,
                         lineHeight = 17.sp
@@ -160,7 +160,7 @@ fun SettingsScreen(
                                     Intent(Intent.ACTION_VIEW, Uri.parse(contactDetails.groupLink))
                                 )
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Link open nahi ho saka", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Could not open the link", Toast.LENGTH_SHORT).show()
                             }
                         }
                         .padding(16.dp),
@@ -168,7 +168,7 @@ fun SettingsScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            contactDetails.groupTitle.ifBlank { "WhatsApp group / channel join karein" },
+                            contactDetails.groupTitle.ifBlank { "Join our WhatsApp group / channel" },
                             color = TextPrimary,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
@@ -201,7 +201,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("MoviesForever v1.0", color = TextSecondary, fontSize = 14.sp)
                 Text(
-                    "Aik baar payment karein, poora saal dekhein. Unlock ke liye WhatsApp / JazzCash par contact karein.",
+                    "Pay once and watch all year. Contact us on WhatsApp to unlock.",
                     color = TextMuted,
                     fontSize = 12.sp
                 )
@@ -253,7 +253,7 @@ private fun ResetUnlockConfirmDialog(
         },
         title = {
             Text(
-                "Is device se access remove karein?",
+                "Remove access from this device?",
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Bold
             )
@@ -261,25 +261,25 @@ private fun ResetUnlockConfirmDialog(
         text = {
             Column {
                 Text(
-                    "Yeh permanent hai. Aap ka code sirf aik baar use hota hai aur " +
-                            "already use ho chuka hai -- dobara nahi lag sakta. Access remove karne ke baad " +
-                            "app lock ho jayegi aur payment page nazar aayega. Wapas lane ka " +
-                            "sirf aik tareeqa hai: naya code khareedna.",
+                    "This is permanent. Your code was single-use and is " +
+                            "already used, so it can't be entered again. Once you remove access " +
+                            "you will be locked out, and the only way " +
+                            "back is to buy a new code.",
                     color = TextSecondary,
                     fontSize = 13.sp,
                     lineHeight = 19.sp
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Yeh koi subscription cancel nahi karta (subscription hai hi nahi -- yeh " +
-                            "aik baar ki payment thi), aur refund nahi hoga.",
+                    "This does not cancel a subscription (there isn't one -- this was a " +
+                            "one-time payment), and there is no refund.",
                     color = TextMuted,
                     fontSize = 12.sp,
                     lineHeight = 17.sp
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Sirf tab aage barhein agar aap ko poora yaqeen hai.",
+                    "Only continue if you are absolutely sure.",
                     color = TextMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold

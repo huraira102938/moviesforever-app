@@ -143,29 +143,29 @@ fun getPlaybackErrorMessage(error: PlaybackException): String {
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
         PlaybackException.ERROR_CODE_TIMEOUT ->
-            "Internet ka masla hai. Internet check kar ke dobara try karein."
+            "Connection problem. Check your internet and try again."
         PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
         PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
         PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
         PlaybackException.ERROR_CODE_IO_UNSPECIFIED ->
-            "Yeh video abhi open nahi ho rahi. Thori der baad try karein."
+            "This video won't open right now. Please try again later."
         PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED ->
-            "Video ka link secure nahi hai."
+            "This video link is not secure."
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
-            "Yeh video file kharab hai ya support nahi hoti."
+            "This video file is damaged or not supported."
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FAILED ->
-            "Aap ke phone par yeh video nahi chal sakti."
+            "This video can't play on your device."
         PlaybackException.ERROR_CODE_DRM_UNSPECIFIED,
         PlaybackException.ERROR_CODE_DRM_SCHEME_UNSUPPORTED,
         PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED ->
-            "Yeh video protected hai aur nahi chal sakti."
+            "This video is protected and can't play."
         else ->
-            "Video nahi chal saki. Dobara try karein."
+            "The video couldn't play. Please try again."
     }
 }
 
@@ -942,7 +942,7 @@ fun PlayerScreen(
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text(
-                    text = "Internet slow hai. Video load ho rahi hai, thora wait karein…",
+                    text = "Slow connection. The video is still loading…",
                     color = TextPrimary,
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -969,7 +969,7 @@ fun PlayerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "Video nahi chal rahi",
+                        text = "Video Not Playing",
                         color = TextPrimary,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold
@@ -977,7 +977,7 @@ fun PlayerScreen(
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = if (error != null) getPlaybackErrorMessage(error)
-                        else "Video load nahi ho saki. Internet check kar ke dobara try karein.",
+                        else "The video couldn't load. Check your internet and try again.",
                         color = TextPrimary.copy(alpha = 0.85f),
                         fontSize = 15.sp,
                         lineHeight = 26.sp,

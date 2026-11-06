@@ -22,14 +22,10 @@ import com.moviesforever.app.ui.theme.*
 
 /**
  * Stage 2 emphasis: shown once right after successful unlock.
- * Primarily pushes "Share & Earn".
  */
 @Composable
 fun CelebrationScreen(
     unlockInfo: UnlockInfo?,
-    pricing: PricingSettings,
-    appShareLink: AppShareLink?,
-    onShare: (String) -> Unit,
     onStartWatching: () -> Unit
 ) {
     Box(
@@ -47,14 +43,14 @@ fun CelebrationScreen(
             Text("🎉", fontSize = 64.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                "Mubarak Ho!",
+                "You're All Set!",
                 color = TextPrimary,
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "One year access unlock ho gaya",
+                "One year access unlocked",
                 color = GoldLight,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
@@ -67,57 +63,6 @@ fun CelebrationScreen(
             )
 
             Spacer(Modifier.height(28.dp))
-
-            // Referral push
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.horizontalGradient(listOf(GoldDeep, Gold, GoldLight)),
-                            RoundedCornerShape(18.dp)
-                        )
-                        .padding(22.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("💰", fontSize = 36.sp)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Share Karein, Paise Kamayein!",
-                            color = Black,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = if (pricing.referralPayout > 0)
-                                "Har dost ke MoviesForever unlock karne par PKR ${pricing.referralPayout.toInt()} kamayein."
-                            else
-                                "Har dost ke MoviesForever unlock karne par paise kamayein.",
-                            color = Black.copy(alpha = 0.8f),
-                            fontSize = 14.sp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        GoldButton(
-                            text = "App Share Karein",
-                            enabled = appShareLink != null && appShareLink.apkUrl.isNotBlank(),
-                            onClick = {
-                                appShareLink?.let { link ->
-                                    onShare(link.buildShareMessage(unlockInfo?.username))
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
 
             TextButton(onClick = onStartWatching) {
                 Text("Start Watching →", color = GoldLight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)

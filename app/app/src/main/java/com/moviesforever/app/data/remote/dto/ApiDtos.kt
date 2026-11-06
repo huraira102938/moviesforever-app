@@ -1,10 +1,12 @@
 package com.moviesforever.app.data.remote.dto
 
+import com.moviesforever.app.data.remote.Market
 import com.google.gson.annotations.SerializedName
 
 data class RedeemRequest(
     @SerializedName("id") val id: String,
-    @SerializedName("username") val username: String
+    @SerializedName("username") val username: String,
+    @SerializedName("market") val market: String = Market.ID
 )
 
 data class RedeemResponse(

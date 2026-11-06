@@ -5,6 +5,7 @@ import com.moviesforever.app.data.model.PricingSettings
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import com.moviesforever.app.data.remote.Market
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,7 +16,7 @@ class PricingRepositoryImpl @Inject constructor(
 
     // Live listener -- see MoviesRepositoryImpl for why.
     override fun observePricing(): Flow<PricingSettings> = callbackFlow {
-        val registration = firestore.document("settings/pricing")
+        val registration = firestore.document("settings/${Market.PRICING_DOC}")
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     trySend(PricingSettings())

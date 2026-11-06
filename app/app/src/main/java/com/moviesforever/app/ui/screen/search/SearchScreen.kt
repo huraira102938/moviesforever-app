@@ -34,7 +34,10 @@ import com.moviesforever.app.ui.theme.*
 
 @Composable
 fun SearchScreen(
+    /** The whole catalogue: typing or picking a category searches all of it. */
     movies: List<Movie>,
+    /** What this viewer sees before searching. */
+    preferredMovies: List<Movie>,
     /** Categories that exist in movies.json (id = Firestore category id), in the admin's order. */
     categories: List<Category>,
     genres: List<Genre>, // Kept in signature for NavHost compatibility, but unused
@@ -44,8 +47,9 @@ fun SearchScreen(
     // Holds a category id ("" = All).
     var selectedCategory by rememberSaveable { mutableStateOf("") }
 
-    val filtered = remember(movies, query, selectedCategory) {
-        movies.filter { m ->
+    val filtered = remember(movies, preferredMovies, query, selectedCategory) {
+        val source = if (query.isBlank() && selectedCategory.isBlank()) preferredMovies else movies
+        source.filter { m ->
             val matchQuery = query.isBlank() || m.title.contains(query, ignoreCase = true)
             val matchCat = selectedCategory.isBlank() || m.category == selectedCategory
             matchQuery && matchCat && !m.paused
@@ -87,7 +91,7 @@ fun SearchScreen(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Movies, anime, shows search karein...", color = TextMuted, fontSize = 13.sp) },
+            placeholder = { Text("Search movies and shows...", color = TextMuted, fontSize = 13.sp) },
             singleLine = true,
             leadingIcon = {
                 Icon(
@@ -206,9 +210,9 @@ fun SearchScreen(
                         modifier = Modifier.size(56.dp)
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text("Koi movie nahi mili", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("No movies found", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(4.dp))
-                    Text("Keywords ya filter change kar ke dekhein", color = TextMuted, fontSize = 12.sp)
+                    Text("Try different keywords or filters", color = TextMuted, fontSize = 12.sp)
                 }
             }
         } else {

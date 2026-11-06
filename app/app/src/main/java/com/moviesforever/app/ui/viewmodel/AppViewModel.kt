@@ -12,7 +12,6 @@ import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.AppNotification
 import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
-import com.moviesforever.app.data.model.ReferralEarnings
 import com.moviesforever.app.data.model.UnlockInfo
 import com.moviesforever.app.data.model.UserAccount
 import com.moviesforever.app.data.repository.AccountRepository
@@ -25,7 +24,6 @@ import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.data.repository.NotificationsRepository
 import com.moviesforever.app.data.repository.PaymentDetailsRepository
 import com.moviesforever.app.data.repository.PricingRepository
-import com.moviesforever.app.data.repository.ReferralEarningsRepository
 import com.moviesforever.app.data.repository.UnlockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import com.moviesforever.app.push.PushTopicManager
@@ -59,7 +57,6 @@ data class AppUiState(
     val wifiOnlyDownloads: Boolean = false,
     val loading: Boolean = true,
     val account: UserAccount? = null,
-    val earnings: ReferralEarnings = ReferralEarnings(),
     val appShareLink: AppShareLink? = null,
     val notifications: List<AppNotification> = emptyList()
 ) {
@@ -74,9 +71,9 @@ data class AppUiState(
      */
     val myNotificationTarget: String
         get() = when {
-            account?.paused == true -> "paused"
-            isUnlocked -> "paid"
-            else -> "free"
+            account?.paused == true -> "uae_paused"
+            isUnlocked -> "uae_paid"
+            else -> "uae_free"
         }
 
     /** Notifications relevant to this user, newest first. This is the in-app feed;
@@ -121,7 +118,6 @@ class AppViewModel @Inject constructor(
     contactDetailsRepository: ContactDetailsRepository,
     unlockRepository: UnlockRepository,
     accountRepository: AccountRepository,
-    referralEarningsRepository: ReferralEarningsRepository,
     appShareRepository: AppShareRepository,
     notificationsRepository: NotificationsRepository,
     private val installRepository: InstallRepository,
@@ -239,16 +235,6 @@ class AppViewModel @Inject constructor(
             initialValue = null
         )
 
-    private val earningsState: StateFlow<ReferralEarnings> = unlockCheckState
-        .flatMapLatest { check ->
-            val info = (check as? UnlockCheckState.Unlocked)?.info
-            if (info != null) referralEarningsRepository.observeEarnings(info.username) else flowOf(ReferralEarnings())
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ReferralEarnings()
-        )
 
     private val appShareLinkState: StateFlow<AppShareLink?> = appShareRepository.observeCurrentShareLink()
         .stateIn(
@@ -292,13 +278,11 @@ class AppViewModel @Inject constructor(
     val uiState: StateFlow<AppUiState> = combine(
         baseUiState,
         accountState,
-        earningsState,
         appShareLinkState,
         notificationsState
-    ) { base, account, earnings, appShareLink, notifications ->
+    ) { base, account, appShareLink, notifications ->
         base.copy(
             account = account,
-            earnings = earnings,
             appShareLink = appShareLink,
             notifications = notifications
         )

@@ -34,6 +34,6 @@ private fun openExternal(context: Context, url: String) {
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "Link open nahi ho saka", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Could not open the link", Toast.LENGTH_SHORT).show()
     }
 }

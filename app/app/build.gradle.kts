@@ -13,11 +13,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.moviesforever.app"
+        applicationId = "com.moviesforever.uae"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 1
+        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

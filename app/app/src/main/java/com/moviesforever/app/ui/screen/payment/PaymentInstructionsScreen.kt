@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.moviesforever.app.data.model.ContactDetails
 import com.moviesforever.app.data.model.PaymentDetails
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.data.remote.Market
 import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.screen.player.findActivity
 import com.moviesforever.app.ui.theme.*
@@ -56,7 +57,7 @@ fun PaymentInstructionsScreen(
     pricing: PricingSettings,
     paymentDetails: PaymentDetails,
     @Suppress("UNUSED_PARAMETER") contactDetails: ContactDetails, // kept so the NavHost call does not change
-    onSendScreenshotWhatsApp: (referralUsername: String) -> Unit,
+    onSendScreenshotWhatsApp: () -> Unit,
     onRedeemCode: (String, String) -> Unit,
     redeeming: Boolean,
     onBack: () -> Unit
@@ -146,14 +147,14 @@ fun PaymentInstructionsScreen(
                             )
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                text = "Poore saal ke liye",
+                                text = "For one full year",
                                 color = TextPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                         Text(
-                            text = "PKR ${pricing.standardPrice.toInt()}",
+                            text = "${Market.CURRENCY} ${pricing.standardPrice.toInt()}",
                             color = GoldLight,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold
@@ -164,14 +165,14 @@ fun PaymentInstructionsScreen(
             }
 
             // 2. Three simple steps
-            SectionTitle("Payment Kaise Karein?")
+            SectionTitle("How to Pay")
             Spacer(Modifier.height(10.dp))
 
-            StepRow("1", "Payment Bhejein", "Neeche diye gaye account mein payment bhejein.")
+            StepRow("1", "Transfer the Amount", "Send the payment to the IBAN below.")
             Spacer(Modifier.height(8.dp))
-            StepRow("2", "Screenshot Bhejein", "Payment ka screenshot WhatsApp par bhejein.")
+            StepRow("2", "Send the Receipt", "Send a screenshot of your payment on WhatsApp.")
             Spacer(Modifier.height(8.dp))
-            StepRow("3", "Code Lein", "Hamari team check kar ke aap ko code aur username bhej degi.")
+            StepRow("3", "Get Your Code", "Our team will check it and send you a code and username.")
 
             Spacer(Modifier.height(24.dp))
 
@@ -191,7 +192,7 @@ fun PaymentInstructionsScreen(
                     Spacer(Modifier.height(8.dp))
                     DetailItem("Account Title", paymentDetails.accountTitle, clipboard)
                     Spacer(Modifier.height(8.dp))
-                    DetailItem("Account Number", paymentDetails.accountNumber, clipboard)
+                    DetailItem("IBAN", paymentDetails.accountNumber, clipboard)
                 }
             }
 
@@ -199,7 +200,7 @@ fun PaymentInstructionsScreen(
 
             // 4. Send receipt: WhatsApp green, so it stands apart from the gold "open account" button below
             Button(
-                onClick = { onSendScreenshotWhatsApp("") },
+                onClick = { onSendScreenshotWhatsApp() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(58.dp),
@@ -217,7 +218,7 @@ fun PaymentInstructionsScreen(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Screenshot WhatsApp Par Bhejein",
+                    text = "Send Receipt on WhatsApp",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -236,14 +237,14 @@ fun PaymentInstructionsScreen(
             ) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        text = "Code Aur Username Mil Gaya?",
+                        text = "Got Your Code and Username?",
                         color = TextPrimary,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Yahan likhein aur apna account unlock karein.",
+                        text = "Enter them here to unlock your account.",
                         color = TextSecondary,
                         fontSize = 14.sp
                     )

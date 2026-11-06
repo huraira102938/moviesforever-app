@@ -26,8 +26,6 @@ import com.moviesforever.app.data.repository.PricingRepository
 import com.moviesforever.app.data.repository.PricingRepositoryImpl
 import com.moviesforever.app.data.repository.RedemptionRepository
 import com.moviesforever.app.data.repository.RedemptionRepositoryImpl
-import com.moviesforever.app.data.repository.ReferralEarningsRepository
-import com.moviesforever.app.data.repository.ReferralEarningsRepositoryImpl
 import com.moviesforever.app.data.repository.TrendingRepository
 import com.moviesforever.app.data.repository.TrendingRepositoryImpl
 import com.moviesforever.app.data.repository.UnlockRepository
@@ -77,10 +75,6 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAccountRepository(impl: AccountRepositoryImpl): AccountRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindReferralEarningsRepository(impl: ReferralEarningsRepositoryImpl): ReferralEarningsRepository
 
     @Binds
     @Singleton

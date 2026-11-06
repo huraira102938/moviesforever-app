@@ -114,6 +114,7 @@ class CatalogueRepository @Inject constructor(
 
         _state.value = CatalogueState(
             shelves = shelves,
+            genres = file.genres,
             // All trending movies, in a different scattered order on every app launch.
             trending = file.trending.mapNotNull { byId[it] }.shuffled(Random(sessionSeed + 7919)),
             // Shuffled once per app launch, so Search shows a new scattered order every time the app is opened.

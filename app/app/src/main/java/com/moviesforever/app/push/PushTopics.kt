@@ -10,16 +10,16 @@ package com.moviesforever.app.push
  * Keep these strings in sync with TOPIC_PREFIX in worker/src/index.js.
  */
 object PushTopics {
-    const val FREE = "mf_free"
-    const val PAID = "mf_paid"
-    const val PAUSED = "mf_paused"
+    const val FREE = "mf_uae_free"
+    const val PAID = "mf_uae_paid"
+    const val PAUSED = "mf_uae_paused"
 
     val ALL = listOf(FREE, PAID, PAUSED)
 
     fun forTarget(target: String): String? = when (target) {
-        "free" -> FREE
-        "paid" -> PAID
-        "paused" -> PAUSED
+        "uae_free" -> FREE
+        "uae_paid" -> PAID
+        "uae_paused" -> PAUSED
         else -> null
     }
 }

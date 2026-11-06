@@ -34,6 +34,7 @@ import coil.request.ImageRequest
 import coil.size.Size
 import com.moviesforever.app.data.model.Movie
 import com.moviesforever.app.data.model.PricingSettings
+import com.moviesforever.app.data.remote.Market
 import com.moviesforever.app.data.repository.MovieDownloadStatus
 import com.moviesforever.app.ui.components.AdminNoteBanner
 import com.moviesforever.app.ui.components.GoldButton
@@ -299,8 +300,8 @@ fun MovieDetailScreen(
                 // Note: this video is NOT free, payment is needed (no price or numbers here,
                 // they change and are shown in the card below).
                 NoteCard(
-                    title = "Yeh Video Free Nahi Hai",
-                    body = "Yeh video dekhne ke liye payment karni hogi. Payment ke baad aap sari videos dekh sakenge. Payment ka tareeqa dekhne ke liye neeche wala button dabayein.",
+                    title = "This Movie Is Not Free",
+                    body = "Unlock One Year Access to watch this movie and everything else in the app. Tap the button below to see how to pay.",
                     accent = Error,
                     icon = Icons.Filled.Lock
                 )
@@ -336,9 +337,9 @@ fun MovieDetailScreen(
 
                         Text(
                             text = if (pricing.standardPrice > 0)
-                                "Sirf ${pricing.standardPrice.toInt()} rupay mein sab kuch dekhein"
+                                "Watch everything for ${Market.CURRENCY} ${pricing.standardPrice.toInt()}"
                             else
-                                "Sari movies dekhein",
+                                "Watch every movie",
                             color = TextPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
@@ -347,7 +348,7 @@ fun MovieDetailScreen(
                         Spacer(Modifier.height(4.dp))
 
                         Text(
-                            text = "Aik baar payment karein aur poore saal ke liye sari movies dekhein aur download karein.",
+                            text = "Pay once to watch and download every movie for a full year.",
                             color = TextSecondary,
                             fontSize = 13.sp,
                             lineHeight = 24.sp
@@ -356,7 +357,7 @@ fun MovieDetailScreen(
                         Spacer(Modifier.height(14.dp))
 
                         GoldButton(
-                            text = "Payment Ka Tareeqa",
+                            text = "See How to Pay",
                             onClick = onUnlockClick,
                             modifier = Modifier.fillMaxWidth()
                         )

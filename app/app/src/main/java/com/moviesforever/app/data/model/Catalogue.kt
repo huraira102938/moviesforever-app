@@ -15,6 +15,8 @@ data class CatalogueFile(
     /** ISO time of the last admin update. The admin panel uses it to find new/changed movies. */
     val generatedAt: String = "",
     val categories: List<CatalogueCategory> = emptyList(),
+    /** Names for the ids in each movie's `genres`. */
+    val genres: List<CatalogueGenre> = emptyList(),
     /** Movie ids in the order the admin panel's Trending page shows them. */
     val trending: List<String> = emptyList(),
     /** Home banners (the admin keeps at most 5). Same fields as [Banner]. */
@@ -28,6 +30,11 @@ data class CatalogueCategory(
     val order: Int = 0
 )
 
+data class CatalogueGenre(
+    val id: String = "",
+    val name: String = ""
+)
+
 /** One Home-screen shelf: all (non-paused) movies of one category. */
 data class Shelf(
     val categoryId: String,
@@ -38,6 +45,7 @@ data class Shelf(
 /** Everything the UI needs from movies.json, already grouped. */
 data class CatalogueState(
     val shelves: List<Shelf> = emptyList(),
+    val genres: List<CatalogueGenre> = emptyList(),
     val trending: List<Movie> = emptyList(),
     val all: List<Movie> = emptyList(),
     val banners: List<Banner> = emptyList(),

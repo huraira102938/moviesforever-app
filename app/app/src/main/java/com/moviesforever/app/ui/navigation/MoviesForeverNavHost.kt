@@ -27,7 +27,6 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.moviesforever.app.data.model.CategoryRules
 import com.moviesforever.app.ui.components.ErrorDialog
 import androidx.navigation.navArgument
 import com.moviesforever.app.data.repository.DownloadRequestResult
@@ -45,7 +44,6 @@ import com.moviesforever.app.ui.screen.payment.PaymentInstructionsScreen
 import com.moviesforever.app.ui.screen.player.PlayerScreen
 import com.moviesforever.app.ui.screen.player.findActivity
 import com.moviesforever.app.ui.screen.profile.ProfileScreen
-import com.moviesforever.app.ui.screen.referral.ReferralScreen
 import com.moviesforever.app.ui.screen.search.SearchScreen
 import com.moviesforever.app.ui.screen.settings.SettingsScreen
 import com.moviesforever.app.ui.screen.splash.SplashScreen
@@ -58,7 +56,6 @@ import com.moviesforever.app.ui.viewmodel.UnlockCheckState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 @Composable
 fun MoviesForeverNavHost(
@@ -131,9 +128,11 @@ fun MoviesForeverNavHost(
             }
 
             composable(Screen.Welcome.route) {
+                val catalogueViewModel: CatalogueViewModel = hiltViewModel()
                 WelcomeScreen(
                     note = uiState.pricing.note,
-                    onStartBrowsing = {
+                    onStartBrowsing = { preference ->
+                        catalogueViewModel.setPreference(preference)
                         viewModel.markInstalled()
                         navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.Welcome.route) { inclusive = true }
@@ -166,7 +165,7 @@ fun MoviesForeverNavHost(
                 redeemErrorMessage?.let { message ->
                     ErrorDialog(
                         message = message,
-                        title = "Code accept nahi hua",
+                        title = "Code not accepted",
                         onDismiss = { redeemErrorMessage = null }
                     )
                 }
@@ -175,17 +174,16 @@ fun MoviesForeverNavHost(
                     pricing = uiState.pricing,
                     paymentDetails = uiState.paymentDetails,
                     contactDetails = uiState.contactDetails,
-                    onSendScreenshotWhatsApp = { referralUsername ->
+                    onSendScreenshotWhatsApp = {
                         val supportNumber = uiState.contactDetails.whatsappNumber
                         if (supportNumber.isBlank()) {
                             Toast.makeText(
                                 context,
-                                "Support ka WhatsApp number abhi set nahi hai. Thori der baad try karein.",
+                                "Support is not available right now. Please try again later.",
                                 Toast.LENGTH_LONG
                             ).show()
                         } else {
-                            val message = "Assalam o Alaikum! Main ne MoviesForever One Year Access ki payment kar di hai." +
-                                    if (referralUsername.isNotBlank()) " Referral Username: $referralUsername" else ""
+                            val message = "Hello! I have paid for MoviesForever One Year Access. Here is my payment receipt."
 
                             val intent = Intent(Intent.ACTION_VIEW).apply {
                                 data = Uri.parse("https://api.whatsapp.com/send?phone=$supportNumber&text=${Uri.encode(message)}")
@@ -195,7 +193,7 @@ fun MoviesForeverNavHost(
                     },
                     onRedeemCode = { id, username ->
                         if (id.isBlank() || username.isBlank()) {
-                            redeemErrorMessage = "Code aur username dono likhein."
+                            redeemErrorMessage = "Please enter both your code and username."
                         } else {
                             lockViewModel.redeem(id, username)
                         }
@@ -214,7 +212,7 @@ fun MoviesForeverNavHost(
                         activity?.finish()
                     } else {
                         backPressedOnce = true
-                        Toast.makeText(context, "Exit ke liye dobara back dabayein", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
                     }
                 }
 
@@ -231,28 +229,17 @@ fun MoviesForeverNavHost(
             }
 
             composable(
-                route = "category_browse/{categoryId}",
-                arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
+                route = "category_browse/{rowId}",
+                arguments = listOf(navArgument("rowId") { type = NavType.StringType })
             ) { backStackEntry ->
-                val categoryId = backStackEntry.arguments?.getString("categoryId") ?: ""
+                val rowId = backStackEntry.arguments?.getString("rowId") ?: ""
                 val catalogueViewModel: CatalogueViewModel = hiltViewModel()
-                val catalogue by catalogueViewModel.state.collectAsState()
-                val shelf = catalogue.shelves.find { it.categoryId == categoryId }
-                // Some categories also pull in others (Bollywood also shows South), mixed together.
-                // The shelves already change order on every app launch, so a fixed seed keeps this
-                // list the same when coming back from a movie, until the app is opened again.
-                val browseMovies = remember(catalogue.shelves, categoryId) {
-                    val ids = listOf(categoryId) + CategoryRules.SHOW_ALL_ALSO_INCLUDES[categoryId].orEmpty()
-                    catalogue.shelves
-                        .filter { it.categoryId in ids }
-                        .flatMap { it.movies }
-                        .distinctBy { it.id }
-                        .shuffled(Random(categoryId.hashCode()))
-                }
+                val feed by catalogueViewModel.feed.collectAsState()
+                val row = feed.rows.find { it.id == rowId }
 
                 CategoryBrowseScreen(
-                    categoryTitle = shelf?.title.orEmpty(),
-                    movies = browseMovies,
+                    categoryTitle = row?.title.orEmpty(),
+                    movies = row?.movies.orEmpty(),
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
@@ -263,9 +250,6 @@ fun MoviesForeverNavHost(
             composable(Screen.Celebration.route) {
                 CelebrationScreen(
                     unlockInfo = uiState.unlockInfo,
-                    pricing = uiState.pricing,
-                    appShareLink = uiState.appShareLink,
-                    onShare = { text -> shareText(context, text) },
                     onStartWatching = {
                         viewModel.markCelebrationShown()
                         currentTab = 0 // always land on Home (the tab number is remembered from before)
@@ -327,14 +311,14 @@ fun MoviesForeverNavHost(
                                 viewModel.downloadMovie(movie) { result ->
                                     when (result) {
                                         DownloadRequestResult.Started -> {
-                                            scope.launch { snackbarHostState.showSnackbar("Download start ho gaya") }
+                                            scope.launch { snackbarHostState.showSnackbar("Download started") }
                                         }
                                         DownloadRequestResult.RequiresUnlock -> {
                                             navController.navigate(Screen.PaymentInstructions.route)
                                         }
                                         DownloadRequestResult.RequiresWifi -> {
                                             scope.launch {
-                                                snackbarHostState.showSnackbar("Download ke liye WiFi connect karein, ya Settings mein WiFi-only Downloads off karein")
+                                                snackbarHostState.showSnackbar("Connect to WiFi to download, or turn off WiFi-only Downloads in Settings")
                                             }
                                         }
                                     }
@@ -388,18 +372,6 @@ fun MoviesForeverNavHost(
                 }
             }
 
-            composable(Screen.Referral.route) {
-                ReferralScreen(
-                    unlockInfo = uiState.unlockInfo,
-                    pricing = uiState.pricing,
-                    account = uiState.account,
-                    earnings = uiState.earnings,
-                    appShareLink = uiState.appShareLink,
-                    onShareApk = { text -> shareText(context, text) },
-                    onBack = { navController.popBackStackSafe() }
-                )
-            }
-
             composable(Screen.Paused.route) {
                 PausedScreen(note = uiState.account?.pauseUserNote.orEmpty())
             }
@@ -440,6 +412,8 @@ private fun MainScaffoldWithTabs(
     val context = LocalContext.current
     val catalogueViewModel: CatalogueViewModel = hiltViewModel()
     val catalogue by catalogueViewModel.state.collectAsState()
+    val feed by catalogueViewModel.feed.collectAsState()
+    val preference by catalogueViewModel.preference.collectAsState()
     val searchCategories = remember(catalogue.shelves) {
         catalogue.shelves.map { Category(id = it.categoryId, name = it.title) }
     }
@@ -454,7 +428,7 @@ private fun MainScaffoldWithTabs(
         Box(modifier = Modifier.padding(paddingValues)) {
             when (currentTab) {
                 0 -> HomeScreen(
-                    banners = catalogue.banners,
+                    feed = feed,
                     pricing = uiState.pricing,
                     isUnlocked = uiState.isUnlocked,
                     onBannerClick = { banner ->
@@ -465,14 +439,15 @@ private fun MainScaffoldWithTabs(
                     onMovieClick = { movie ->
                         navController.navigate(Screen.MovieDetail.createRoute(movie.id))
                     },
-                    onShowAllClick = { categoryId ->
-                        navController.navigate("category_browse/$categoryId")
+                    onShowAllClick = { rowId ->
+                        navController.navigate("category_browse/$rowId")
                     },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) },
                     onAvatarClick = { onTabSelected(3) }
                 )
                 1 -> SearchScreen(
                     movies = catalogue.all,
+                    preferredMovies = feed.pool,
                     categories = searchCategories,
                     genres = emptyList(),
                     onMovieClick = { movie ->
@@ -496,14 +471,11 @@ private fun MainScaffoldWithTabs(
                 3 -> ProfileScreen(
                     unlockInfo = uiState.unlockInfo,
                     pricing = uiState.pricing,
-                    account = uiState.account,
-                    earnings = uiState.earnings,
-                    appShareLink = uiState.appShareLink,
-                    onShareApk = { text -> shareText(context, text) },
-                    onReferralClick = { navController.navigate(Screen.Referral.route) },
                     onSettings = { navController.navigate(Screen.Settings.route) },
                     onNotifications = { navController.navigate(Screen.Notifications.route) },
                     notificationCount = uiState.myNotifications.size,
+                    preference = preference,
+                    onPreferenceChange = { catalogueViewModel.setPreference(it) },
                     onUnlockClick = { navController.navigate(Screen.PaymentInstructions.route) }
                 )
             }
@@ -511,10 +483,3 @@ private fun MainScaffoldWithTabs(
     }
 }
 
-private fun shareText(context: android.content.Context, text: String) {
-    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(sendIntent, "Share"))
-}

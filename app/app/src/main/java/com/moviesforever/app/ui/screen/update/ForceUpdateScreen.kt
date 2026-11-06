@@ -31,9 +31,9 @@ import com.moviesforever.app.ui.components.GoldButton
 import com.moviesforever.app.ui.components.GoldOutlinedButton
 import com.moviesforever.app.ui.theme.*
 
-private const val DEFAULT_TITLE = "App Ka Naya Version Download Karein"
+private const val DEFAULT_TITLE = "Download the New Version"
 private const val DEFAULT_MESSAGE =
-    "Aap ki app ka yeh version purana hai aur ab kaam nahi karega. Naya version download karein ya hum se contact karein."
+    "This version of the app is out of date and no longer works. Please download the new version or contact us."
 
 /**
  * Full-screen block shown to builds that are older than the minimum allowed version
@@ -103,7 +103,7 @@ fun ForceUpdateScreen(config: AppUpdateConfig, currentVersionCode: Long) {
 
         if (url.isNotEmpty()) {
             GoldButton(
-                text = "Naya Version Download Karein",
+                text = "Download New Version",
                 onClick = { context.openLink(url) },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -112,7 +112,7 @@ fun ForceUpdateScreen(config: AppUpdateConfig, currentVersionCode: Long) {
 
         if (number.isNotEmpty()) {
             GoldOutlinedButton(
-                text = "WhatsApp Par Contact Karein",
+                text = "Contact Us on WhatsApp",
                 onClick = { context.openLink("https://wa.me/" + number.filter { it.isDigit() }) },
                 modifier = Modifier.fillMaxWidth()
             )

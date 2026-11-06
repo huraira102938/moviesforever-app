@@ -368,13 +368,13 @@ async function handleContact() {
   }
 }
 
-async function saveInstallSnapshot(scheduledMs) {
-  const doc = await getDocument("installs", "counter");
+async function saveInstallSnapshot(scheduledMs, counterId, dailyCollection) {
+  const doc = await getDocument("installs", counterId);
   const total = fieldsToObject(doc && doc.fields).installCount;
   // Never save a bad reading: it would show up as a wrong day in the report.
   if (!Number.isInteger(total)) throw new Error(`bad installCount: ${total}`);
   for (const { date, fields } of installSnapshotWrites(scheduledMs, total)) {
-    await updateDocument("installDaily", date, Object.keys(fields), fields);
+    await updateDocument(dailyCollection, date, Object.keys(fields), fields);
   }
 }
 
@@ -414,6 +414,8 @@ async function handleRedeem(request) {
   }
   const id = (body.id || "").trim();
   const username = (body.username || "").trim();
+  // The Pakistan app sends no market. Codes from one market must not unlock the other.
+  const market = body.market === "uae" ? "uae" : "pk";
 
   if (id.length > 100 || username.length > 100) {
     return jsonResponse(200, { success: false, message: "This code is invalid." });
@@ -437,6 +439,10 @@ async function handleRedeem(request) {
   }
 
   const code = fieldsToObject(doc.fields);
+  if ((code.market === "uae" ? "uae" : "pk") !== market) {
+    return jsonResponse(200, { success: false, message: "This code is invalid." });
+  }
+
   if (code.status === "used") {
     return jsonResponse(200, { success: false, message: "This code is already used." });
   }
@@ -479,6 +485,7 @@ async function handleRedeem(request) {
       );
     } else {
       await createDocument("users", id, {
+        ...(market === "uae" ? { market } : {}),
         id,
         username,
         referralCount: 0,
@@ -535,7 +542,7 @@ async function handleSignedUrl(request) {
 
 // Devices subscribe to exactly one of these topics (see PushTopics.kt in the app).
 const TOPIC_PREFIX = "mf_";
-const VALID_TARGETS = ["free", "paid", "paused"];
+const VALID_TARGETS = ["free", "paid", "paused", "uae_free", "uae_paid", "uae_paused"];
 const PUSH_CHANNEL_ID = "moviesforever_push"; // must match PushNotifier.CHANNEL_ID
 const PUSH_MAX_AGE_MS = 6 * 60 * 60 * 1000;   // don't blast a stale notification late
 const PUSH_MAX_ATTEMPTS = 3;
@@ -743,8 +750,14 @@ export default {
     );
     if (new Date(event.scheduledTime).getUTCMinutes() === 0) {
       ctx.waitUntil(
-        saveInstallSnapshot(event.scheduledTime).catch((e) =>
+        saveInstallSnapshot(event.scheduledTime, "counter", "installDaily").catch((e) =>
           console.error("install snapshot failed", String(e && e.message ? e.message : e))
+        )
+      );
+      ctx.waitUntil(
+        // Fails harmlessly until the first UAE install creates the counter.
+        saveInstallSnapshot(event.scheduledTime, "counter-uae", "installDaily-uae").catch((e) =>
+          console.error("uae install snapshot skipped", String(e && e.message ? e.message : e))
         )
       );
     }

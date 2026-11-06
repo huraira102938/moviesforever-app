@@ -5,6 +5,7 @@ import com.moviesforever.app.data.model.PaymentDetails
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import com.moviesforever.app.data.remote.Market
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,7 +17,7 @@ class PaymentDetailsRepositoryImpl @Inject constructor(
     // Live listener (not a one-shot get()) so admin changes to the bank
     // details show up in the app right away, without a new release.
     override fun observePaymentDetails(): Flow<PaymentDetails> = callbackFlow {
-        val registration = firestore.collection("settings").document("payment-details")
+        val registration = firestore.collection("settings").document(Market.PAYMENT_DETAILS_DOC)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     trySend(PaymentDetails())

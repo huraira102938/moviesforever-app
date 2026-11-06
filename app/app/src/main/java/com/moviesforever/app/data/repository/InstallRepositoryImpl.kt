@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import com.moviesforever.app.data.remote.Market
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +24,7 @@ private val Context.installDataStore: DataStore<Preferences> by preferencesDataS
 // reads/writes today: one small Firestore doc, incremented atomically.
 // The admin panel only needs to read `installs/counter`.installCount once it
 // adds a UI for it -- this app-side change doesn't require any admin work.
-private const val COUNTER_DOC_PATH = "installs/counter"
+private const val COUNTER_DOC_PATH = Market.INSTALL_COUNTER_DOC
 private const val COUNTER_FIELD = "installCount"
 
 @Singleton

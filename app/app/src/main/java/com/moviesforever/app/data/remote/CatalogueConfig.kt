@@ -10,5 +10,5 @@ object CatalogueConfig {
     const val BASE_URL = "https://videos.moviesforever.online/"
 
     /** The single catalogue file. Must match `CATALOGUE_KEY` in the admin panel. */
-    const val FILE_NAME = "movies.json"
+    const val FILE_NAME = Market.CATALOGUE_FILE
 }

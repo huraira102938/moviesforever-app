@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import com.moviesforever.app.data.remote.Market
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +26,7 @@ class AppUpdateRepository @Inject constructor(
     private val prefs get() = context.getSharedPreferences("app_update_cache", Context.MODE_PRIVATE)
 
     fun observe(): Flow<AppUpdateConfig> = callbackFlow {
-        val registration = firestore.collection("settings").document("appUpdate")
+        val registration = firestore.collection("settings").document(Market.APP_UPDATE_DOC)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) {
                     trySend(readCache())

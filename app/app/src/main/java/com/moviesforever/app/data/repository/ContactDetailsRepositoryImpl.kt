@@ -5,6 +5,7 @@ import com.moviesforever.app.data.model.ContactDetails
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import com.moviesforever.app.data.remote.Market
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,7 +18,7 @@ class ContactDetailsRepositoryImpl @Inject constructor(
     // and the group/channel link update in the app right away when the
     // admin changes them, without a new release.
     override fun observeContactDetails(): Flow<ContactDetails> = callbackFlow {
-        val registration = firestore.collection("settings").document("contact")
+        val registration = firestore.collection("settings").document(Market.CONTACT_DOC)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     trySend(ContactDetails())
