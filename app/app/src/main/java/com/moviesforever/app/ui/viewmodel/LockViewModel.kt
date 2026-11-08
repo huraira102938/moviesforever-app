@@ -35,7 +35,7 @@ class LockViewModel @Inject constructor(
             if (result.success && result.username != null) {
                 unlockRepository.saveUnlock(
                     UnlockInfo(
-                        id = id.trim(),
+                        id = result.id ?: id.trim(),
                         username = result.username!!,
                         unlockedAt = System.currentTimeMillis(),
                         celebrationShown = false

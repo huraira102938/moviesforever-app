@@ -19,7 +19,8 @@ class RedemptionRepositoryImpl @Inject constructor(
                 RedemptionResult(
                     success = true,
                     message = response.message,
-                    username = response.username ?: username.trim()
+                    username = response.username ?: username.trim(),
+                    id = response.id ?: id.trim()
                 )
             } else {
                 RedemptionResult(false, toUserMessage(response.message))

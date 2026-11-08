@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.moviesforever.app.data.model.ContactDetails
@@ -262,7 +264,7 @@ fun PaymentInstructionsScreen(
                         modifier = Modifier.fillMaxWidth().then(showWholeCard),
                         label = { Text("Code") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardOptions = exactTextKeyboard(ImeAction.Next),
                         shape = RoundedCornerShape(12.dp),
                         colors = textFieldColors()
                     )
@@ -273,7 +275,7 @@ fun PaymentInstructionsScreen(
                         modifier = Modifier.fillMaxWidth().then(showWholeCard),
                         label = { Text("Username") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardOptions = exactTextKeyboard(ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = {
                             focusManager.clearFocus()
                             onRedeemCode(codeId, signInUsername)
@@ -382,6 +384,18 @@ private fun DetailItem(label: String, value: String, clipboard: ClipboardManager
         }
     }
 }
+
+/**
+ * Codes and usernames are case-sensitive, so the keyboard must type exactly what the person
+ * presses: no capital first letter, no autocorrect. The password keyboard type is the one
+ * every keyboard app (Gboard, Samsung) respects; the text itself stays visible.
+ */
+private fun exactTextKeyboard(imeAction: ImeAction) = KeyboardOptions(
+    capitalization = KeyboardCapitalization.None,
+    autoCorrect = false,
+    keyboardType = KeyboardType.Password,
+    imeAction = imeAction
+)
 
 @Composable
 private fun textFieldColors() = OutlinedTextFieldDefaults.colors(

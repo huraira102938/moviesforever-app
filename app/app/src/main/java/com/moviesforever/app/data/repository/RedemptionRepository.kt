@@ -3,7 +3,8 @@ package com.moviesforever.app.data.repository
 data class RedemptionResult(
     val success: Boolean,
     val message: String,
-    val username: String? = null
+    val username: String? = null,
+    val id: String? = null
 )
 
 interface RedemptionRepository {
