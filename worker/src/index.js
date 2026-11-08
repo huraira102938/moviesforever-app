@@ -405,6 +405,58 @@ async function handleStats() {
   return jsonResponse(200, { movieCount, installCount });
 }
 
+// Text pasted from WhatsApp on an Urdu phone can carry invisible direction marks, and an Urdu
+// keyboard types Urdu digits. Codes are plain Latin letters and digits, so drop or convert the rest.
+function cleanTyped(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/[٠-٩۰-۹]/g, (d) => String(d.charCodeAt(0) & 0xf))
+    .replace(/\p{Cf}/gu, "")
+    .trim();
+}
+
+// Usernames match whatever the keyboard did to capitals and spaces.
+function sameUsername(a, b) {
+  const flat = (s) => cleanTyped(s).replace(/\s+/g, "").toLowerCase();
+  return flat(a) === flat(b);
+}
+
+// Shows hidden and non-Latin characters in the logs, e.g. "‎kjvhZJ64".
+function visible(value) {
+  return String(value).replace(/[^\x20-\x7e]/g, (c) =>
+    "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+}
+
+function logRedeemFailure(reason, body) {
+  console.log(JSON.stringify({
+    event: "redeem_failed",
+    reason,
+    id: visible(body.id || ""),
+    username: visible(body.username || ""),
+    useServerId: Boolean(body.useServerId),
+  }));
+}
+
+/** Returns { id, doc } for the code, or null. Throws when Firestore itself fails. */
+async function findCode(id, allowCaseFix) {
+  const candidates = [id];
+  // Phone keyboards capitalise the first letter on their own.
+  if (allowCaseFix) {
+    const first = id.charAt(0);
+    const flipped = first === first.toLowerCase() ? first.toUpperCase() : first.toLowerCase();
+    if (flipped !== first) candidates.push(flipped + id.slice(1));
+  }
+  for (const candidate of candidates) {
+    try {
+      const doc = await getDocument("codes", candidate);
+      if (doc && doc.fields) return { id: candidate, doc };
+    } catch (e) {
+      if (!String(e && e.message ? e.message : e).includes("-> 404")) throw e;
+    }
+  }
+  return null;
+}
+
 async function handleRedeem(request) {
   let body;
   try {
@@ -412,40 +464,55 @@ async function handleRedeem(request) {
   } catch (_) {
     return jsonResponse(400, { success: false, message: "Invalid JSON body." });
   }
-  const id = (body.id || "").trim();
-  const username = (body.username || "").trim();
+  const typedId = (body.id || "").trim();
+  const username = cleanTyped(body.username);
+  // Newer apps save the `id` this returns. Older apps save the id as typed and log the person
+  // out when no account exists under it, so for them the code must match exactly as typed.
+  const useServerId = body.useServerId === true;
+  const cleanedId = cleanTyped(typedId).replace(/\s+/g, "");
 
-  if (id.length > 100 || username.length > 100) {
+  if (typedId.length > 100 || username.length > 100) {
     return jsonResponse(200, { success: false, message: "This code is invalid." });
   }
 
-  if (!id || !username) {
+  if (!typedId || !username) {
     return jsonResponse(400, {
       success: false,
       message: "Please enter both your Code ID and Username.",
     });
   }
 
-  let doc;
+  if (!useServerId && cleanedId !== typedId) {
+    logRedeemFailure("hidden_characters_old_app", body);
+    return jsonResponse(200, { success: false, message: "This code is invalid." });
+  }
+
+  let found;
   try {
-    doc = await getDocument("codes", id);
+    found = await findCode(cleanedId, useServerId);
   } catch (e) {
+    console.log(`redeem lookup failed: ${e && e.message ? e.message : e}`);
+    return jsonResponse(500, { success: false, message: "Server error. Please try again." });
+  }
+  if (!found) {
+    logRedeemFailure("not_found", body);
     return jsonResponse(200, { success: false, message: "This code is invalid." });
   }
-  if (!doc || !doc.fields) {
-    return jsonResponse(200, { success: false, message: "This code is invalid." });
-  }
+  const { id, doc } = found;
 
   const code = fieldsToObject(doc.fields);
   if (code.status === "used") {
     return jsonResponse(200, { success: false, message: "This code is already used." });
   }
-  if (String(code.username) !== username) {
+  if (!sameUsername(code.username, username)) {
+    logRedeemFailure("username_mismatch", body);
     return jsonResponse(200, {
       success: false,
       message: "The username does not match this code.",
     });
   }
+  // Store and return the username exactly as the admin wrote it.
+  const savedUsername = String(code.username);
 
   // Atomically burn the code. The write only succeeds if the doc has not changed since we
   // read it (updateTime precondition), so two simultaneous requests can never both redeem it.
@@ -480,7 +547,7 @@ async function handleRedeem(request) {
     } else {
       await createDocument("users", id, {
         id,
-        username,
+        username: savedUsername,
         referralCount: 0,
         createdAt: now,
       });
@@ -492,7 +559,8 @@ async function handleRedeem(request) {
   return jsonResponse(200, {
     success: true,
     message: "Unlocked! Enjoy one year access.",
-    username,
+    id,
+    username: savedUsername,
   });
 }
 
